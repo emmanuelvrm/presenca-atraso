@@ -12,14 +12,18 @@
     ['v-load', 'v-form', 'v-res'].forEach(function (x) { $(x).hidden = (x !== id); });
   }
 
-  function geo() {
-    return new Promise(function (resolve) {
-      if (!window.GEOFENCE || !navigator.geolocation) { resolve(null); return; }
+  // Pede a localização já ao abrir a página (junto com o login/cadastro).
+  var geoPromise = null;
+  function geo(forcar) {
+    if (geoPromise && !forcar) { return geoPromise; }
+    geoPromise = new Promise(function (resolve) {
+      if (!navigator.geolocation) { resolve(null); return; }
       navigator.geolocation.getCurrentPosition(
         function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }); },
         function () { resolve(null); },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 });
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
     });
+    return geoPromise;
   }
 
   function api(url, corpo) {
@@ -43,9 +47,9 @@
     mostrar('v-res');
   }
 
-  function checkin() {
+  function checkin(renovar) {
     mostrar('v-load');
-    geo().then(function (g) { return api('/api/checkin', { geo: g }); }).then(function (r) {
+    geo(!!renovar).then(function (g) { return api('/api/checkin', { geo: g }); }).then(function (r) {
       var j = r.j;
       if (r.status === 401 || j.precisa_cadastro) { formulario(); return; }
       if (!j.ok) {
@@ -96,8 +100,9 @@
     }).catch(function () { btn.disabled = false; formulario('Sem conexão. Tente novamente.'); });
   });
 
-  $('res-tentar').addEventListener('click', checkin);
+  $('res-tentar').addEventListener('click', function () { checkin(true); });
   $('matricula').addEventListener('input', function (e) { e.target.value = e.target.value.toUpperCase(); });
 
+  geo();
   checkin();
 })();
