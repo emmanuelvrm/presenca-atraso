@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}QR code{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>QR code de presença</h1>
+<section class="card qrbox">
+  <img src="{{ url_for('qr_png') }}" alt="QR code que abre {{ url }}">
+  <p>Endereço: <code class="url">{{ url }}</code></p>
+  <p class="muted">Este QR é único e fixo: pode ser impresso e colado. Ele só registra presença enquanto houver aula aberta para a turma do aluno.</p>
+  <div class="toolbar" style="justify-content:center">
+    <button class="btn" type="button" onclick="window.print()">Imprimir</button>
+    <a class="btn sec" href="{{ url_for('qr_png') }}" download="qr-presenca.png">Baixar PNG</a>
+  </div>
+  {% if not url.startswith('https') %}
+  <p class="erro">Atenção: o endereço não é HTTPS. Em produção use HTTPS e defina BASE_URL; sem isso a localização do celular (opcional) não funciona.</p>
+  {% endif %}
+</section>
+{% endblock %}

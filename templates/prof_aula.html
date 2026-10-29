@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ aula.turma }}{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<div id="app" data-aula="{{ aula.id }}" data-aberta="{{ '1' if aula.status == 'aberta' else '0' }}">
+  <div class="head">
+    <h1 id="titulo">{{ aula.turma }}</h1>
+    <span id="relogio" class="muted"></span>
+  </div>
+  <p id="sub" class="muted"></p>
+
+  <div class="chips">
+    <div class="chip"><b id="t-turma">–</b><span>na turma</span></div>
+    <div class="chip ok"><b id="t-ok">–</b><span>no horário</span></div>
+    <div class="chip warn"><b id="t-atr">–</b><span>atrasados</span></div>
+    <div class="chip bad"><b id="t-nao">–</b><span>não leram o QR</span></div>
+  </div>
+
+  <div class="actions">
+    <button id="b-conferir" class="btn bad" type="button">Conferir antes de passar a lista</button>
+    <a class="btn sec" href="{{ url_for('prof_relatorio', aula_id=aula.id) }}">Relatório</a>
+    {% if aula.status == 'aberta' %}
+    <form method="post" action="{{ url_for('prof_encerrar', aula_id=aula.id) }}" onsubmit="return confirm('Encerrar a aula? Novas leituras serão bloqueadas.');">
+      <button class="btn sec" type="submit">Encerrar aula</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('prof_reabrir', aula_id=aula.id) }}">
+      <button class="btn sec" type="submit">Reabrir aula</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <section id="painel-nao" class="card painel-nao" hidden>
+    <h2>NÃO assinam a lista (<span id="n-nao">0</span>)</h2>
+    <p id="aviso-conferir" class="muted"></p>
+    <ul id="l-nao" class="lista"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Atrasados</h2>
+    <p class="muted">Confirme se o aluno apresentou a autorização do pedagógico.</p>
+    <ul id="l-atr" class="lista"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Não leram o QR code</h2>
+    <ul id="l-nl" class="lista"></ul>
+  </section>
+
+  <section id="s-atencao" class="card" hidden>
+    <h2>Atenção</h2>
+    <ul id="l-atencao" class="lista"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Saídas antecipadas</h2>
+    <div class="row">
+      <label>Aluno<select id="sa-aluno"></select></label>
+      <label>Motivo (opcional)<input id="sa-motivo" maxlength="200"></label>
+    </div>
+    <button id="sa-btn" class="btn sm" type="button">Registrar saída agora</button>
+    <ul id="l-saidas" class="lista"></ul>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='prof_aula.js') }}"></script>{% endblock %}

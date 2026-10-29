@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Turmas{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Turmas</h1>
+
+<section class="card">
+  <h2>Turmas cadastradas</h2>
+  {% if turmas %}
+  <ul class="lista">
+    {% for t in turmas %}
+    <li>
+      <span class="who"><b>{{ t.nome }}</b><small>{{ t.n }} aluno(s) · {{ t.vinc }} com aparelho vinculado</small></span>
+      <a class="btn sec sm" href="{{ url_for('prof_turma', tid=t.id) }}">Abrir</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="vazio">Nenhuma turma ainda.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Nova turma / importar lista</h2>
+  <form method="post">
+    <label>Nome da turma
+      <input name="nome" required maxlength="40" placeholder="Ex.: INF10-M">
+    </label>
+    <label>Lista de alunos (uma linha por aluno: matrícula e nome)
+      <textarea name="lista" placeholder="INF240118 Amanda Cristina Gomes Ferreira&#10;INF240136 Andre Lucas Pantaleao De Souza"></textarea>
+    </label>
+    <p class="muted">Copie as colunas Matrícula e Nome da ata. Aceita separador por espaço, vírgula, ponto e vírgula ou tab.
+      Importar de novo atualiza os nomes sem perder os aparelhos vinculados.</p>
+    <button class="btn" type="submit">Salvar turma</button>
+  </form>
+</section>
+{% endblock %}

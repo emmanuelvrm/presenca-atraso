@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Registrar presença{% endblock %}
+{% block bodyclass %}aluno{% endblock %}
+{% block content %}
+<h1 class="brand">Registro de presença</h1>
+
+<section id="v-load" class="card center">
+  <div class="spin" aria-hidden="true"></div>
+  <p>Registrando sua chegada…</p>
+</section>
+
+<section id="v-form" class="card" hidden>
+  <h2>Primeiro acesso</h2>
+  <p class="muted">Preencha uma única vez. Nas próximas aulas, basta escanear o QR code.</p>
+  <form id="f-cad">
+    <label>Nome completo
+      <input id="nome" name="name" autocomplete="name" required maxlength="120">
+    </label>
+    <label>Turma
+      <select id="turma" required>
+        <option value="">Selecione…</option>
+        {% for t in turmas %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Matrícula
+      <input id="matricula" autocapitalize="characters" autocomplete="off" required maxlength="20" placeholder="Ex.: INF240000">
+    </label>
+    <p id="f-erro" class="erro" role="alert" hidden></p>
+    <button class="btn big" type="submit">Registrar minha chegada</button>
+  </form>
+</section>
+
+<section id="v-res" class="card res" hidden>
+  <div id="res-icone" class="res-icone" aria-hidden="true"></div>
+  <h2 id="res-titulo"></h2>
+  <p id="res-nome" class="res-nome"></p>
+  <p id="res-texto"></p>
+  <button id="res-tentar" class="btn sec" type="button" hidden>Tentar novamente</button>
+</section>
+
+<p class="muted center foot">Dados errados ou celular novo? Fale com o professor.</p>
+{% endblock %}
+{% block scripts %}
+<script>window.GEOFENCE = {{ 'true' if geofence else 'false' }};</script>
+<script src="{{ url_for('static', filename='aluno.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Relatório {{ e.aula.turma }}{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<div class="toolbar noprint">
+  <button class="btn" type="button" onclick="window.print()">Imprimir / salvar PDF</button>
+  <a class="btn sec" href="{{ url_for('prof_relatorio_csv', aula_id=e.aula.id) }}">Baixar CSV</a>
+  <button class="btn sec" type="button" id="copiar">Copiar resumo</button>
+  {% if mailto %}<a class="btn sec" href="{{ mailto }}">Enviar por e-mail ao pedagógico</a>{% endif %}
+  <a class="btn sec" href="{{ url_for('prof_aula', aula_id=e.aula.id) }}">Voltar à aula</a>
+</div>
+
+<section class="card">
+  <h1>Relatório de frequência para o pedagógico</h1>
+  <p><b>Turma:</b> {{ e.aula.turma }}<br>
+     <b>Disciplina:</b> {{ e.aula.disciplina or '—' }}<br>
+     <b>Data:</b> {{ e.aula.data }} · <b>Início:</b> {{ e.aula.inicio }} ·
+     <b>Tolerância:</b> {{ e.aula.tolerancia_min }} min · <b>Corte para assinar:</b> {{ e.aula.corte_txt }} (até {{ e.aula.limite }})<br>
+     <b>Situação da aula:</b> {{ 'aberta' if e.aula.status == 'aberta' else 'encerrada' }}</p>
+  <p><b>Resumo:</b> {{ e.totais.turma }} aluno(s) na turma · {{ e.totais.no_horario }} no horário ·
+     {{ e.totais.atrasados }} atrasado(s) · {{ e.totais.nao_leram }} sem leitura do QR ·
+     {{ e.saidas|length }} saída(s) antecipada(s).</p>
+
+  <h3>Atrasados</h3>
+  {% if e.atrasados %}
+  <table>
+    <thead><tr><th>Matrícula</th><th>Nome</th><th>Chegada</th><th>Atraso</th><th>Autorização do pedagógico</th></tr></thead>
+    <tbody>
+    {% for x in e.atrasados %}
+      <tr>
+        <td>{{ x.matricula }}</td><td>{{ x.nome }}</td><td>{{ x.chegada }}{% if x.manual %} (manual){% endif %}</td><td>{{ x.atraso_txt }}</td>
+        <td>
+          {% if x.status == 'bloqueado' %}Acima do corte — não assina
+          {% elif x.autorizado == 1 %}Apresentada
+          {% elif x.autorizado == 0 %}NÃO apresentada
+          {% else %}Não conferida{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="vazio">Nenhum atrasado.</p>{% endif %}
+
+  <h3>Não leram o QR code</h3>
+  {% if e.nao_leram %}
+  <table>
+    <thead><tr><th>Matrícula</th><th>Nome</th></tr></thead>
+    <tbody>{% for x in e.nao_leram %}<tr><td>{{ x.matricula }}</td><td>{{ x.nome }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="vazio">Todos leram.</p>{% endif %}
+
+  <h3>Saídas antecipadas</h3>
+  {% if e.saidas %}
+  <table>
+    <thead><tr><th>Matrícula</th><th>Nome</th><th>Saída</th><th>Motivo</th></tr></thead>
+    <tbody>{% for x in e.saidas %}<tr><td>{{ x.matricula }}</td><td>{{ x.nome }}</td><td>{{ x.hora }}</td><td>{{ x.motivo or '—' }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="vazio">Nenhuma saída registrada.</p>{% endif %}
+
+  <h3>Não podem assinar a ata</h3>
+  {% if e.nao_assinam %}
+  <table>
+    <thead><tr><th>Matrícula</th><th>Nome</th><th>Motivo</th></tr></thead>
+    <tbody>{% for x in e.nao_assinam %}<tr><td>{{ x.matricula }}</td><td>{{ x.nome }}</td><td>{{ x.motivo }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="vazio">Todos puderam assinar.</p>{% endif %}
+</section>
+
+<textarea id="txt" hidden>{{ texto }}</textarea>
+<script>
+  document.getElementById('copiar').addEventListener('click', function () {
+    var t = document.getElementById('txt').value, b = this;
+    function ok() { b.textContent = 'Copiado!'; setTimeout(function () { b.textContent = 'Copiar resumo'; }, 1800); }
+    if (navigator.clipboard) { navigator.clipboard.writeText(t).then(ok); }
+    else { var a = document.getElementById('txt'); a.hidden = false; a.select(); document.execCommand('copy'); a.hidden = true; ok(); }
+  });
+</script>
+{% endblock %}

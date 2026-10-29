@@ -1,0 +1,17 @@
+INF240118 Ana Souza
+INF240136 Bruno Lima
+INF240149 Carla Dias
+INF240108 Diego Rocha
+INF240119 Elisa Prado
+INF250009 Fabio Matos
+INF240123 Gabriela Nunes
+INF240160 Hugo Reis
+INF240150 Iara Campos
+INF240165 Joao Pires
+INF240151 Karen Melo
+INF240115 Lucas Viana
+INF240129 Mara Teixeira
+INF240121 Nelson Bastos
+INF240155 Olivia Cunha
+INF240131 Paulo Ramos
+INF240161 Rita Moura

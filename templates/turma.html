@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ turma.nome }}{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Turma {{ turma.nome }}</h1>
+
+<section class="card">
+  <h2>Alunos ({{ alunos|length }})</h2>
+  <ul class="lista">
+    {% for a in alunos %}
+    <li>
+      <span class="who"><b>{{ a.nome }}</b><small>{{ a.matricula }}</small></span>
+      <span class="btns">
+        {% if a.fora_lista %}<span class="badge warn">fora da lista</span>{% endif %}
+        {% if a.device_key %}<span class="badge ok">aparelho vinculado</span>{% else %}<span class="badge gray">sem aparelho</span>{% endif %}
+        {% if a.device_key %}
+        <form method="post" action="{{ url_for('prof_liberar', aid=a.id) }}" onsubmit="return confirm('Liberar o aparelho de {{ a.nome|e }}?');">
+          <button class="btn sec sm" type="submit">Liberar aparelho</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('prof_remover_aluno', aid=a.id) }}" onsubmit="return confirm('Remover o aluno e o histórico dele?');">
+          <button class="btn sec sm" type="submit">Remover</button>
+        </form>
+      </span>
+    </li>
+    {% else %}
+    <li class="vazio">Turma sem alunos.</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Importar mais alunos</h2>
+  <form method="post">
+    <label>Matrícula e nome, um por linha
+      <textarea name="lista"></textarea>
+    </label>
+    <button class="btn" type="submit">Importar</button>
+  </form>
+</section>
+{% endblock %}

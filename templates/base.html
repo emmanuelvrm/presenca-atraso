@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Presença{% endblock %} · Presença &amp; Atrasos</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="{% block bodyclass %}{% endblock %}">
+{% block nav %}{% endblock %}
+<main class="wrap">
+{% for categoria, msg in get_flashed_messages(with_categories=true) %}
+  <div class="flash {{ categoria }}" role="status">{{ msg }}</div>
+{% endfor %}
+{% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Painel{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Painel do professor</h1>
+
+{% if abertas %}
+<section class="card">
+  <h2>Aulas abertas</h2>
+  <ul class="lista">
+  {% for a in abertas %}
+    <li>
+      <span class="who"><b>{{ a.turma }}{% if a.disciplina %} · {{ a.disciplina }}{% endif %}</b>
+        <small>início {{ hm(a.inicio) }} · {{ a.leram }} leitura(s)</small></span>
+      <a class="btn sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Acompanhar</a>
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Abrir aula</h2>
+  {% if not turmas %}
+    <p>Cadastre uma turma antes: <a href="{{ url_for('prof_turmas') }}">Turmas</a>.</p>
+  {% else %}
+  <form method="post" action="{{ url_for('prof_criar_aula') }}">
+    <div class="row">
+      <label>Turma
+        <select name="turma_id" required>
+          {% for t in turmas %}<option value="{{ t.id }}">{{ t.nome }} ({{ t.n }})</option>{% endfor %}
+        </select>
+      </label>
+      <label>Início da aula
+        <input name="inicio" type="time" value="{{ agora }}" required>
+      </label>
+    </div>
+    <label>Disciplina
+      <input name="disciplina" maxlength="120" value="{{ ultima_disciplina }}" placeholder="Ex.: Administração de Sistemas Operacionais II">
+    </label>
+    <div class="row">
+      <label>Tolerância (min)
+        <input name="tolerancia" type="number" min="0" max="600" value="{{ tol }}">
+      </label>
+      <label>Corte para assinar (min)
+        <input name="corte" type="number" min="1" max="600" value="{{ corte }}">
+      </label>
+    </div>
+    <p class="muted">Quem chegar até a tolerância fica "no horário". Acima do corte (90 min = 1h30) o aluno não assina a lista.
+      Abrir uma nova aula encerra a aula aberta anterior da mesma turma.</p>
+    <button class="btn" type="submit">Abrir aula</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Aulas recentes</h2>
+  {% if recentes %}
+  <ul class="lista">
+    {% for a in recentes %}
+    <li>
+      <span class="who"><b>{{ a.turma }}{% if a.disciplina %} · {{ a.disciplina }}{% endif %}</b>
+        <small>{{ dmy(a.inicio) }} · início {{ hm(a.inicio) }} · {{ a.leram }} leitura(s)</small></span>
+      <span class="btns">
+        <a class="btn sec sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Ver</a>
+        <a class="btn sec sm" href="{{ url_for('prof_relatorio', aula_id=a.id) }}">Relatório</a>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="vazio">Nenhuma aula encerrada ainda.</p>{% endif %}
+</section>
+{% endblock %}

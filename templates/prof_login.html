@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+{% block bodyclass %}aluno{% endblock %}
+{% block content %}
+<h1 class="brand">Área do professor</h1>
+<form class="card" method="post">
+  <label>Senha
+    <input type="password" name="senha" autocomplete="current-password" required autofocus>
+  </label>
+  {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+  <button class="btn big" type="submit">Entrar</button>
+</form>
+{% endblock %}
