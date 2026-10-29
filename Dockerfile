@@ -6,4 +6,4 @@ COPY . .
 ENV DATA_DIR=/data PORT=8000
 VOLUME /data
 EXPOSE 8000
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "2", "--access-logfile", "-", "app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "1", "--threads", "4", "--access-logfile", "-", "app:app"]

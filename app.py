@@ -120,7 +120,7 @@ def init_db():
                 pass
         con.close()
         return
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=30)
     con.execute("PRAGMA journal_mode=WAL")
     for stmt in _schema_sql():
         con.execute(stmt)
