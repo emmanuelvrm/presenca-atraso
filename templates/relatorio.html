@@ -14,6 +14,8 @@
   <h1>Relatório de frequência para o pedagógico</h1>
   <p><b>Turma:</b> {{ e.aula.turma }}<br>
      <b>Disciplina:</b> {{ e.aula.disciplina or '—' }}<br>
+     {% if e.aula.assunto %}<b>Assunto:</b> {{ e.aula.assunto }}<br>{% endif %}
+     {% if e.aula.curso %}<b>Andamento:</b> {{ e.aula.curso.posicao }} · {{ e.aula.curso.texto }}<br>{% endif %}
      <b>Data:</b> {{ e.aula.data }} · <b>Início:</b> {{ e.aula.inicio }} ·
      <b>Tolerância:</b> {{ e.aula.tolerancia_min }} min · <b>Corte para assinar:</b> {{ e.aula.corte_txt }} (até {{ e.aula.limite }})<br>
      <b>Situação da aula:</b> {{ 'aberta' if e.aula.status == 'aberta' else 'encerrada' }}</p>

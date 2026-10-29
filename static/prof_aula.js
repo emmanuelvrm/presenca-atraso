@@ -7,6 +7,7 @@
   var primeiro = true;
   var painelAberto = false;
   var ultimo = null;
+  var assuntoSujo = false;
 
   function el(tag, cls, texto) {
     var n = document.createElement(tag);
@@ -55,13 +56,32 @@
     $('t-atr').textContent = t.atrasados;
     $('t-nao').textContent = t.nao_leram;
 
+    // assunto e andamento da disciplina
+    $('curso').textContent = a.curso ? (a.curso.posicao + ' · ' + a.curso.texto) : '';
+    if (document.activeElement !== $('assunto') && !assuntoSujo) $('assunto').value = a.assunto || '';
+
+    // já entraram (no horário)
+    var ul = $('l-ok'); limpar(ul);
+    if (!e.entraram.length) vazio(ul, 'Ninguém entrou no horário ainda.');
+    e.entraram.forEach(function (x) {
+      var li = el('li');
+      li.appendChild(quem(x, 'chegou ' + x.chegada + (x.manual ? ' · registro manual' : '')));
+      var d = el('span', 'btns');
+      if (x.local === true) d.appendChild(badge('ok', '📍 local'));
+      else if (x.local === false) d.appendChild(badge('bad', '📍 sem local'));
+      li.appendChild(d);
+      ul.appendChild(li);
+    });
+
     // atrasados
-    var ul = $('l-atr'); limpar(ul);
+    ul = $('l-atr'); limpar(ul);
     if (!e.atrasados.length) vazio(ul, 'Nenhum atrasado até agora.');
     e.atrasados.forEach(function (x) {
       var li = el('li');
       li.appendChild(quem(x, 'chegou ' + x.chegada + ' (+' + x.atraso_txt + ')' + (x.manual ? ' · registro manual' : '')));
       var d = el('span', 'btns');
+      if (x.local === true) d.appendChild(badge('ok', '📍 local'));
+      else if (x.local === false) d.appendChild(badge('bad', '📍 sem local'));
       if (x.status === 'bloqueado') {
         d.appendChild(badge('bad', 'acima de ' + a.corte_txt + ' · não assina'));
       } else {
@@ -150,6 +170,16 @@
     if (!id) return;
     chamar(base + '/saida', { aluno_id: parseInt(id, 10), motivo: $('sa-motivo').value }).then(function () {
       $('sa-motivo').value = '';
+      atualizar();
+    });
+  });
+
+  $('assunto').addEventListener('input', function () { assuntoSujo = true; });
+  $('b-assunto').addEventListener('click', function () {
+    var b = $('b-assunto'); b.disabled = true;
+    chamar(base + '/assunto', { assunto: $('assunto').value }).then(function () {
+      assuntoSujo = false; b.disabled = false; b.textContent = 'Salvo!';
+      setTimeout(function () { b.textContent = 'Salvar assunto'; }, 1500);
       atualizar();
     });
   });

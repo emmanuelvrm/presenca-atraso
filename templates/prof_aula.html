@@ -13,7 +13,7 @@
     <div class="chip"><b id="t-turma">–</b><span>na turma</span></div>
     <div class="chip ok"><b id="t-ok">–</b><span>no horário</span></div>
     <div class="chip warn"><b id="t-atr">–</b><span>atrasados</span></div>
-    <div class="chip bad"><b id="t-nao">–</b><span>não leram o QR</span></div>
+    <div class="chip bad"><b id="t-nao">–</b><span>ainda não entraram</span></div>
   </div>
 
   <div class="actions">
@@ -37,15 +37,31 @@
   </section>
 
   <section class="card">
-    <h2>Atrasados</h2>
-    <p class="muted">Confirme se o aluno apresentou a autorização do pedagógico.</p>
-    <ul id="l-atr" class="lista"></ul>
+    <h2>Assunto da aula</h2>
+    <p id="curso" class="muted"></p>
+    <div class="btns">
+      <input id="assunto" maxlength="300" placeholder="O que será visto hoje (aparece para o aluno ao registrar a presença)" style="flex:1;margin:0">
+      <button id="b-assunto" class="btn sm" type="button">Salvar assunto</button>
+    </div>
   </section>
 
-  <section class="card">
-    <h2>Não leram o QR code</h2>
-    <ul id="l-nl" class="lista"></ul>
-  </section>
+  <div class="cols">
+    <section class="card col">
+      <h2>Já entraram <small class="muted">(no horário)</small></h2>
+      <ul id="l-ok" class="lista"></ul>
+    </section>
+    <div class="col">
+      <section class="card">
+        <h2>Entraram com atraso</h2>
+        <p class="muted">Confirme se o aluno apresentou a autorização do pedagógico.</p>
+        <ul id="l-atr" class="lista"></ul>
+      </section>
+      <section class="card">
+        <h2>Ainda não entraram <small class="muted">(não leram o QR)</small></h2>
+        <ul id="l-nl" class="lista"></ul>
+      </section>
+    </div>
+  </div>
 
   <section id="s-atencao" class="card" hidden>
     <h2>Atenção</h2>

@@ -3,6 +3,7 @@
 {% block nav %}{% include "_nav.html" %}{% endblock %}
 {% block content %}
 <h1>Turma {{ turma.nome }}</h1>
+<p class="muted">A etiqueta 📍 mostra se o celular informou a localização nas leituras do QR. Quem aparece "sem local" pode ter escaneado fora da unidade (por exemplo, com uma foto do QR).</p>
 
 <section class="card">
   <h2>Alunos ({{ alunos|length }})</h2>
@@ -11,6 +12,12 @@
     <li>
       <span class="who"><b>{{ a.nome }}</b><small>{{ a.matricula }}</small></span>
       <span class="btns">
+        {% set l = loc.get(a.id) %}
+        {% if not l %}<span class="badge gray" title="Ainda não escaneou o QR">sem leituras</span>
+        {% elif l.com == l.n %}<span class="badge ok" title="Todas as leituras com localização">📍 local capturado ({{ l.n }})</span>
+        {% elif l.com == 0 %}<span class="badge bad" title="Nenhuma leitura trouxe a localização: pode ter escaneado fora da unidade">📍 sem local ({{ l.n }})</span>
+        {% else %}<span class="badge warn" title="Algumas leituras sem localização">📍 local em {{ l.com }}/{{ l.n }}</span>{% endif %}
+        {% if geofence and l and l.fora %}<span class="badge bad">fora da unidade ({{ l.fora }})</span>{% endif %}
         {% if a.fora_lista %}<span class="badge warn">fora da lista</span>{% endif %}
         {% if a.device_key %}<span class="badge ok">aparelho vinculado</span>{% else %}<span class="badge gray">sem aparelho</span>{% endif %}
         {% if a.device_key %}
@@ -22,6 +29,14 @@
           <button class="btn sec sm" type="submit">Remover</button>
         </form>
       </span>
+      <details class="editar" style="flex-basis:100%">
+        <summary class="btn sec sm" style="display:inline-block">Editar nome e matrícula</summary>
+        <form method="post" action="{{ url_for('prof_editar_aluno', aid=a.id) }}" class="row" style="margin-top:8px;align-items:end">
+          <label>Nome <input name="nome" value="{{ a.nome }}" required maxlength="120"></label>
+          <label>Matrícula <input name="matricula" value="{{ a.matricula }}" required maxlength="20" autocapitalize="characters"></label>
+          <button class="btn sm" type="submit">Salvar</button>
+        </form>
+      </details>
     </li>
     {% else %}
     <li class="vazio">Turma sem alunos.</li>

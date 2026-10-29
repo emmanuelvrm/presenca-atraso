@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Aulas{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Aulas</h1>
+
+<form method="get" class="toolbar">
+  <select name="turma" onchange="this.form.submit()" aria-label="Turma">
+    <option value="">Todas as turmas</option>
+    {% for t in turmas %}<option value="{{ t.id }}" {{ 'selected' if t.id == turma_id }}>{{ t.nome }}</option>{% endfor %}
+  </select>
+  <label style="margin:0;display:flex;align-items:center;gap:6px;font-weight:600">
+    <input type="checkbox" name="todas" value="1" style="width:auto;margin:0" {{ 'checked' if todas }} onchange="this.form.submit()">
+    incluir disciplinas já encerradas
+  </label>
+  <a class="btn sec sm" href="{{ url_for('prof_importar') }}">Importar disciplinas</a>
+</form>
+
+{% if de_hoje %}
+<section class="card">
+  <h2>Aulas de hoje</h2>
+  <ul class="lista">
+  {% for a in de_hoje %}
+    <li>
+      <span class="who"><b>{{ a.turma }} · {{ a.disciplina }}</b>
+        <small>{% if a.numero %}aula {{ a.numero }} · {% endif %}{{ a.assunto or 'sem assunto' }}</small></span>
+      {% if a.status == 'aberta' %}
+        <a class="btn sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Acompanhar (aberta)</a>
+      {% else %}
+        <form method="post" action="{{ url_for('prof_agenda_abrir', aula_id=a.id) }}" class="btns">
+          <input type="time" name="inicio" value="{{ a.hora or '19:00' }}" style="width:auto;margin:0" aria-label="Início da aula" required>
+          <button class="btn sm" type="submit">Abrir aula</button>
+        </form>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% for x in discs %}
+{% set d = x.d %}
+<details class="card" {{ 'open' if x.em_curso }}>
+  <summary><b>{{ d.turma }} · {{ d.nome }}</b>
+    <small class="muted"> · {{ x.periodo }} · {{ d.dias }} · {{ x.aulas|length }} aula(s){% if d.encontros %} (planilha: {{ d.encontros }}){% endif %}</small>
+  </summary>
+  <ul class="lista">
+  {% for a in x.aulas %}
+    <li id="aula{{ a.id }}" {% if a.hoje %}style="background:var(--warn-bg)"{% endif %}>
+      <span class="who"><b>{{ a.numero }}. {{ a.dia }}{% if a.hoje %} · hoje{% endif %}</b>
+        <small>{% if a.status == 'agendada' %}agendada{% elif a.status == 'aberta' %}aberta{% else %}encerrada · {{ a.leram }} leitura(s){% endif %}</small></span>
+      <form method="post" action="{{ url_for('prof_agenda_assunto', aula_id=a.id) }}" class="btns" style="flex:1;min-width:220px">
+        <input type="hidden" name="next" value="{{ caminho }}">
+        <input name="assunto" value="{{ a.assunto or '' }}" maxlength="300" placeholder="Assunto da aula" style="margin:0;flex:1" aria-label="Assunto da aula {{ a.numero }}">
+        <button class="btn sec sm" type="submit">Salvar</button>
+      </form>
+      <span class="btns">
+        {% if a.status == 'agendada' %}
+        <form method="post" action="{{ url_for('prof_agenda_abrir', aula_id=a.id) }}" class="btns">
+          <input type="time" name="inicio" value="{{ d.hora_inicio or '19:00' }}" style="width:auto;margin:0" aria-label="Início" required>
+          <button class="btn sm" type="submit">Abrir</button>
+        </form>
+        <form method="post" action="{{ url_for('prof_agenda_remover', aula_id=a.id) }}" onsubmit="return confirm('Remover esta aula da agenda?');">
+          <input type="hidden" name="next" value="{{ caminho }}">
+          <button class="btn sec sm" type="submit">Remover</button>
+        </form>
+        {% elif a.status == 'aberta' %}
+        <a class="btn sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Acompanhar</a>
+        {% else %}
+        <a class="btn sec sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Ver</a>
+        <a class="btn sec sm" href="{{ url_for('prof_relatorio', aula_id=a.id) }}">Relatório</a>
+        {% endif %}
+      </span>
+    </li>
+  {% endfor %}
+  </ul>
+  <form method="post" action="{{ url_for('prof_agenda_adicionar', did=d.id) }}" class="btns" style="margin-top:10px">
+    <input type="hidden" name="next" value="{{ caminho }}">
+    <input name="data" placeholder="dd/mm/aaaa" style="width:150px;margin:0" aria-label="Data da nova aula" required>
+    <button class="btn sec sm" type="submit">Adicionar aula nesta data</button>
+  </form>
+</details>
+{% else %}
+<section class="card">
+  <p class="vazio">Nenhuma disciplina cadastrada ainda. Use <a href="{{ url_for('prof_importar') }}">Importar</a> para trazer as disciplinas da planilha.</p>
+</section>
+{% endfor %}
+{% endblock %}

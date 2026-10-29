@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Importar{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Importar</h1>
+
+<section class="card">
+  <h2>Disciplinas e aulas (planilha de turmas)</h2>
+  <p class="muted">Copie as linhas da aba <b>Alocações</b> da planilha (com o cabeçalho) e cole aqui, ou envie um arquivo CSV/TSV.
+    Colunas usadas: <b>Turma, Turno, D. Sem, Inicio, Fim, Materia, Enc.</b> (a coluna "Encontros restantes" é ignorada).
+    O sistema gera uma aula para cada dia da semana entre o início e o fim, pulando feriados nacionais, e você pode ajustar na aba Aulas.</p>
+  <form method="post" action="{{ url_for('prof_importar_acao', tipo='disciplinas') }}" enctype="multipart/form-data">
+    <label>Colar linhas
+      <textarea name="lista" placeholder="Turma&#9;Turno&#9;D. Sem&#9;Inicio&#9;Fim&#9;Encontros restantes&#9;Materia&#9;Enc.&#10;INF12T&#9;Tarde&#9;s,q,s&#9;28/10&#9;30/11&#9;12&#9;Linguagem de Programação para Web&#9;13"></textarea>
+    </label>
+    <label>…ou arquivo <input type="file" name="arquivo" accept=".csv,.tsv,.txt"></label>
+    <label style="font-weight:400"><input type="checkbox" name="so_ativas" value="1" checked style="display:inline;width:auto;margin:0 6px 0 0">
+      pular linhas com Status "Finalizado"</label>
+    <p class="muted">Dias da semana: <code>seg,qua,sex</code> (ou o formato abreviado da planilha: <code>s,q,s</code> = seg/qua/sex; <code>t,q,s</code> = ter/qui/sex).
+      Outro formato aceito, sem cabeçalho: <code>Turma;Dias;Início;Fim;Disciplina;Encontros</code>. Importar de novo só acrescenta datas que faltam.</p>
+    <button class="btn" type="submit">Importar disciplinas</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Alunos</h2>
+  <form method="post" action="{{ url_for('prof_importar_acao', tipo='alunos') }}" enctype="multipart/form-data">
+    <div class="row">
+      <label>Turma existente
+        <select name="turma_id"><option value="">—</option>
+          {% for t in turmas %}<option value="{{ t.id }}">{{ t.nome }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>…ou nova turma
+        <input name="turma_nova" maxlength="40" placeholder="Ex.: INF10M">
+      </label>
+    </div>
+    <label>Matrícula e nome, um por linha
+      <textarea name="lista" placeholder="INF240118 Amanda Cristina Gomes Ferreira"></textarea>
+    </label>
+    <label>…ou arquivo <input type="file" name="arquivo" accept=".csv,.tsv,.txt"></label>
+    <label style="font-weight:400"><input type="checkbox" name="com_turma" value="1" style="display:inline;width:auto;margin:0 6px 0 0">
+      a lista traz a turma na primeira coluna (<code>Turma;Matrícula;Nome</code>) — várias turmas de uma vez</label>
+    <button class="btn" type="submit">Importar alunos</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Turmas</h2>
+  <form method="post" action="{{ url_for('prof_importar_acao', tipo='turmas') }}" enctype="multipart/form-data">
+    <label>Uma turma por linha (opcional: <code>turma;turno</code>)
+      <textarea name="lista" style="min-height:90px" placeholder="INF10M;Manhã&#10;INF12T;Tarde"></textarea>
+    </label>
+    <button class="btn" type="submit">Importar turmas</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Cadastrar uma disciplina manualmente</h2>
+  <form method="post" action="{{ url_for('prof_importar_acao', tipo='manual') }}">
+    <div class="row">
+      <label>Turma <input name="turma" required maxlength="40" placeholder="INF12T"></label>
+      <label>Turno <select name="turno"><option>Manhã</option><option>Tarde</option><option>Noite</option></select></label>
+      <label>Hora de início <input name="hora" type="time"></label>
+    </div>
+    <label>Disciplina <input name="nome" required maxlength="120"></label>
+    <div class="row">
+      <label>Dias da semana <input name="dias" required placeholder="seg,qua,sex"></label>
+      <label>Primeira aula <input name="ini" required placeholder="dd/mm/aaaa"></label>
+      <label>Última aula / prova <input name="fim" required placeholder="dd/mm/aaaa"></label>
+      <label>Nº de encontros <input name="enc" type="number" min="1" max="200"></label>
+    </div>
+    <button class="btn" type="submit">Salvar disciplina</button>
+  </form>
+</section>
+{% endblock %}

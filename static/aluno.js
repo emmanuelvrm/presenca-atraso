@@ -36,7 +36,7 @@
     });
   }
 
-  function resultado(classe, icone, titulo, nome, texto, tentar) {
+  function resultado(classe, icone, titulo, nome, texto, tentar, extra) {
     var box = $('v-res');
     box.className = 'card res ' + classe;
     $('res-icone').textContent = icone;
@@ -44,6 +44,12 @@
     $('res-nome').textContent = nome || '';
     $('res-texto').textContent = texto || '';
     $('res-tentar').hidden = !tentar;
+    var aula = extra || {};
+    var temAula = !!(aula.disciplina || aula.assunto || aula.curso);
+    $('res-aula').hidden = !temAula;
+    $('res-disc').textContent = aula.disciplina ? aula.disciplina + (aula.curso ? ' · ' + aula.curso.posicao : '') : '';
+    $('res-assunto').textContent = aula.assunto ? 'Assunto de hoje: ' + aula.assunto : '';
+    $('res-curso').textContent = aula.curso ? aula.curso.texto : '';
     mostrar('v-res');
   }
 
@@ -58,14 +64,14 @@
       }
       var quando = j.nova ? 'Chegada registrada às ' + j.chegada + '.' : 'Você já tinha registrado às ' + j.chegada + '.';
       if (j.status === 'ok') {
-        resultado('ok', '✅', 'Presença registrada', j.perfil.nome, quando + ' Você chegou no horário.', false);
+        resultado('ok', '✅', 'Presença registrada', j.perfil.nome, quando + ' Você chegou no horário.', false, j);
       } else if (j.status === 'atrasado') {
         resultado('warn', '⏰', 'Você está atrasado (' + j.atraso_txt + ')', j.perfil.nome,
           quando + ' Vá ao pedagógico pedir a autorização de entrada e entregue ao professor. ' +
-          'Sem a autorização você não poderá assinar a lista.', false);
+          'Sem a autorização você não poderá assinar a lista.', false, j);
       } else {
         resultado('bad', '⛔', 'Atraso acima de ' + j.corte_txt, j.perfil.nome,
-          quando + ' Com mais de ' + j.corte_txt + ' de atraso não é possível assinar a lista desta aula.', false);
+          quando + ' Com mais de ' + j.corte_txt + ' de atraso não é possível assinar a lista desta aula.', false, j);
       }
     }).catch(function () {
       resultado('info', '📶', 'Sem conexão', '', 'Não foi possível falar com o servidor. Verifique a internet e tente novamente.', true);

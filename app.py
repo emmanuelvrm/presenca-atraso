@@ -98,7 +98,30 @@ CREATE TABLE IF NOT EXISTS leituras(
 CREATE TABLE IF NOT EXISTS saidas(
   id {PK}, aula_id INTEGER NOT NULL REFERENCES aulas(id),
   aluno_id INTEGER NOT NULL REFERENCES alunos(id), ts {BIG} NOT NULL, motivo TEXT);
+CREATE TABLE IF NOT EXISTS disciplinas(
+  id {PK}, turma_id INTEGER NOT NULL REFERENCES turmas(id), nome TEXT NOT NULL,
+  dias TEXT, data_ini TEXT, data_fim TEXT, encontros INTEGER, hora_inicio TEXT,
+  UNIQUE(turma_id, nome, data_ini));
 """
+
+# colunas acrescentadas depois da primeira versão (bancos já existentes são migrados)
+COLUNAS_NOVAS = [
+    ("turmas", "turno", "TEXT"),
+    ("aulas", "disciplina_id", "INTEGER"),
+    ("aulas", "numero", "INTEGER"),
+    ("aulas", "data_ref", "TEXT"),
+    ("aulas", "assunto", "TEXT"),
+]
+
+
+def _migrar_sqlite(con):
+    for tabela, coluna, tipo in COLUNAS_NOVAS:
+        existentes = {r[1] for r in con.execute("PRAGMA table_info(%s)" % tabela)}
+        if coluna not in existentes:
+            try:
+                con.execute("ALTER TABLE %s ADD COLUMN %s %s" % (tabela, coluna, tipo))
+            except sqlite3.OperationalError:  # outro processo acrescentou ao mesmo tempo
+                pass
 
 
 def _schema_sql():
@@ -118,12 +141,18 @@ def init_db():
                 con.execute(stmt)
             except psycopg.Error:  # outro worker criou ao mesmo tempo
                 pass
+        for tabela, coluna, tipo in COLUNAS_NOVAS:
+            try:
+                con.execute("ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s" % (tabela, coluna, tipo))
+            except psycopg.Error:
+                pass
         con.close()
         return
     con = sqlite3.connect(DB_PATH, timeout=30)
     con.execute("PRAGMA journal_mode=WAL")
     for stmt in _schema_sql():
         con.execute(stmt)
+    _migrar_sqlite(con)
     con.commit()
     con.close()
 
@@ -292,6 +321,176 @@ def aula_aberta_da_turma(turma_id):
         "ORDER BY inicio DESC LIMIT 1", (turma_id, limite)).fetchone()
 
 
+# ------------------------------------------------- disciplinas, agenda de aulas
+FERIADOS = {
+    "2026-01-01", "2026-04-03", "2026-04-21", "2026-05-01", "2026-09-07", "2026-10-12",
+    "2026-11-02", "2026-11-15", "2026-11-20", "2026-12-25",
+    "2027-01-01", "2027-03-26", "2027-04-21", "2027-05-01", "2027-09-07", "2027-10-12",
+    "2027-11-02", "2027-11-15", "2027-11-20", "2027-12-25",
+}
+HORA_TURNO = {"manha": "07:30", "tarde": "13:30", "noite": "19:00"}
+NOMES_DIA = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def sem_acento(s):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", s or "") if unicodedata.category(c) != "Mn")
+
+
+def chave(s):
+    return re.sub(r"[^a-z0-9]", "", sem_acento(s).lower())
+
+
+def hoje():
+    return datetime.fromtimestamp(now(), TZ).date()
+
+
+def hora_do_turno(turno):
+    return HORA_TURNO.get(chave(turno), "")
+
+
+def parse_dias(texto):
+    """'seg,qua,sex' ou o formato abreviado da planilha ('s,q,s' / 't,q,s')."""
+    tokens = [chave(t) for t in re.split(r"[,;/\s]+", texto or "") if chave(t)]
+    nomes = {"seg": 0, "ter": 1, "qua": 2, "qui": 3, "sex": 4, "sab": 5, "dom": 6}
+    dias, anterior = [], None
+    for t in tokens:
+        if len(t) >= 3 and t[:3] in nomes:
+            d = nomes[t[:3]]
+        elif t == "s":
+            d = 0 if anterior is None else 4
+        elif t == "t":
+            d = 1
+        elif t == "q":
+            d = 3 if anterior in (1, 2) else 2
+        else:
+            return []
+        if d not in dias:
+            dias.append(d)
+        anterior = d
+    return sorted(dias)
+
+
+def dias_txt(dias):
+    return ",".join(NOMES_DIA[d] for d in dias)
+
+
+def parse_data(texto, padrao_ano=None, depois_de=None):
+    t = (texto or "").strip()
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", t)
+    try:
+        if m:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+        m = re.fullmatch(r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?", t)
+        if not m:
+            return None
+        ano = int(m.group(3)) if m.group(3) else (padrao_ano or hoje().year)
+        if ano < 100:
+            ano += 2000
+        d = datetime(ano, int(m.group(2)), int(m.group(1))).date()
+        if not m.group(3) and depois_de and d < depois_de:
+            d = datetime(ano + 1, d.month, d.day).date()
+        return d
+    except ValueError:
+        return None
+
+
+def gerar_datas(dias, ini, fim):
+    out, d = [], ini
+    while d <= fim and (d - ini).days <= 400:
+        if d.weekday() in dias and d.isoformat() not in FERIADOS:
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
+def epoch_do_dia(data, hhmm):
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", hhmm or "")
+    h, mi = (int(m.group(1)), int(m.group(2))) if m else (19, 0)
+    return int(datetime(data.year, data.month, data.day, h, mi, tzinfo=TZ).timestamp())
+
+
+def renumerar(con, disciplina_id):
+    linhas = con.execute("SELECT id FROM aulas WHERE disciplina_id=? ORDER BY data_ref, id",
+                         (disciplina_id,)).fetchall()
+    for i, r in enumerate(linhas, 1):
+        con.execute("UPDATE aulas SET numero=? WHERE id=?", (i, r["id"]))
+
+
+def obter_turma(con, nome, turno=None):
+    nome = norm_turma(nome)
+    con.execute("INSERT INTO turmas(nome) VALUES (?) ON CONFLICT DO NOTHING", (nome,))
+    turma = con.execute("SELECT * FROM turmas WHERE nome=?", (nome,)).fetchone()
+    if turno and not turma["turno"]:
+        con.execute("UPDATE turmas SET turno=? WHERE id=?", (turno.strip()[:20], turma["id"]))
+        turma = con.execute("SELECT * FROM turmas WHERE id=?", (turma["id"],)).fetchone()
+    return turma
+
+
+def salvar_disciplina(con, turma_nome, turno, dias_t, ini_t, fim_t, nome, encontros, hora=None):
+    """Cria/atualiza a disciplina e gera as aulas (datas) que ainda não existem.
+    Devolve (ok, mensagem)."""
+    nome = norm_nome(nome)
+    dias = parse_dias(dias_t)
+    ini = parse_data(ini_t)
+    fim = parse_data(fim_t, padrao_ano=ini.year if ini else None, depois_de=ini)
+    if not norm_turma(turma_nome) or not nome:
+        return False, "turma e disciplina são obrigatórias"
+    if not dias:
+        return False, "dias da semana não reconhecidos (%r)" % dias_t
+    if ini is None or fim is None or fim < ini:
+        return False, "datas inválidas (%s a %s)" % (ini_t, fim_t)
+    try:
+        enc = int(str(encontros).strip()) if str(encontros or "").strip() else None
+    except ValueError:
+        enc = None
+    turma = obter_turma(con, turma_nome, turno)
+    hora = (hora or "").strip() or hora_do_turno(turma["turno"] or turno) or "19:00"
+    con.execute("INSERT INTO disciplinas(turma_id,nome,dias,data_ini,data_fim,encontros,hora_inicio) "
+                "VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+                (turma["id"], nome, dias_txt(dias), ini.isoformat(), fim.isoformat(), enc, hora))
+    disc = con.execute("SELECT * FROM disciplinas WHERE turma_id=? AND nome=? AND data_ini=?",
+                       (turma["id"], nome, ini.isoformat())).fetchone()
+    con.execute("UPDATE disciplinas SET dias=?, data_fim=?, encontros=?, hora_inicio=? WHERE id=?",
+                (dias_txt(dias), fim.isoformat(), enc, hora, disc["id"]))
+    existentes = {r["data_ref"] for r in con.execute(
+        "SELECT data_ref FROM aulas WHERE disciplina_id=?", (disc["id"],))}
+    novas = 0
+    for d in gerar_datas(dias, ini, fim):
+        if d.isoformat() in existentes:
+            continue
+        con.execute("INSERT INTO aulas(turma_id,disciplina,inicio,status,criada_em,disciplina_id,data_ref) "
+                    "VALUES (?,?,?,'agendada',?,?,?)",
+                    (turma["id"], nome, epoch_do_dia(d, hora), now(), disc["id"], d.isoformat()))
+        novas += 1
+    renumerar(con, disc["id"])
+    total = con.execute("SELECT COUNT(*) AS n FROM aulas WHERE disciplina_id=?", (disc["id"],)).fetchone()["n"]
+    msg = "%s · %s: %d aula(s) criada(s), %d no total" % (turma["nome"], nome, novas, total)
+    if enc and enc != total:
+        msg += " (planilha informa %d encontro(s); ajuste na aba Aulas)" % enc
+    return True, msg
+
+
+def info_curso(con, aula):
+    """Número da aula, quantas faltam e a data da prova (fim da disciplina)."""
+    if not aula["disciplina_id"] or not aula["data_ref"]:
+        return None
+    disc = con.execute("SELECT * FROM disciplinas WHERE id=?", (aula["disciplina_id"],)).fetchone()
+    total = con.execute("SELECT COUNT(*) AS n FROM aulas WHERE disciplina_id=?",
+                        (aula["disciplina_id"],)).fetchone()["n"]
+    faltam = con.execute("SELECT COUNT(*) AS n FROM aulas WHERE disciplina_id=? AND data_ref>?",
+                         (aula["disciplina_id"], aula["data_ref"])).fetchone()["n"]
+    fim = parse_data(disc["data_fim"]) if disc else None
+    fim_txt = fim.strftime("%d/%m/%Y") if fim else ""
+    if faltam > 0:
+        texto = "Faltam %d aula%s para a prova%s." % (faltam, "" if faltam == 1 else "s",
+                                                      " (%s)" % fim_txt if fim_txt else "")
+    else:
+        texto = "Esta é a última aula da disciplina — prova%s." % (" em %s" % fim_txt if fim_txt else "")
+    return {"numero": aula["numero"], "total": total, "faltam": faltam, "fim": fim_txt,
+            "texto": texto, "posicao": "Aula %s de %d" % (aula["numero"], total)}
+
+
 # ------------------------------------------------------------- aluno (público)
 @app.get("/")
 def index():
@@ -371,7 +570,9 @@ def api_checkin():
         con.commit()
     lt = con.execute("SELECT * FROM leituras WHERE aula_id=? AND aluno_id=?",
                      (aula["id"], aluno["id"])).fetchone()
+    curso = info_curso(con, aula)
     return jsonify(ok=True, nova=nova, perfil=perfil, disciplina=aula["disciplina"] or "",
+                   assunto=aula["assunto"] or "", curso=curso, data=dmy(aula["inicio"]),
                    inicio=hm(aula["inicio"]), chegada=hm(lt["ts"]), atraso_min=lt["atraso_min"],
                    atraso_txt=fmt_atraso(lt["atraso_min"]), status=status_de(lt["atraso_min"], aula),
                    corte_txt=fmt_atraso(aula["corte_min"]))
@@ -439,7 +640,7 @@ def prof_home():
             "(SELECT COUNT(*) FROM leituras l WHERE l.aula_id=a.id) AS leram "
             "FROM aulas a JOIN turmas t ON t.id=a.turma_id ")
     abertas = con.execute(base + "WHERE a.status='aberta' ORDER BY a.inicio DESC").fetchall()
-    recentes = con.execute(base + "WHERE a.status<>'aberta' ORDER BY a.inicio DESC LIMIT 15").fetchall()
+    recentes = con.execute(base + "WHERE a.status='encerrada' ORDER BY a.inicio DESC LIMIT 15").fetchall()
     ultima = con.execute("SELECT disciplina FROM aulas ORDER BY id DESC LIMIT 1").fetchone()
     return render_template("prof_home.html", turmas=turmas, abertas=abertas, recentes=recentes,
                            hm=hm, dmy=dmy, agora=hm(now()), tol=TOLERANCIA_PADRAO,
@@ -463,13 +664,27 @@ def prof_criar_aula():
         return redirect(url_for("prof_home"))
     inicio = parse_hm(f.get("inicio")) or now()
     t = now()
+    disciplina = (f.get("disciplina") or "").strip()[:120]
     con.execute("UPDATE aulas SET status='encerrada', encerrada_em=? WHERE turma_id=? AND status='aberta'",
                 (t, turma_id))
-    cur = con.execute(
-        "INSERT INTO aulas(turma_id,disciplina,inicio,tolerancia_min,corte_min,criada_em) VALUES (?,?,?,?,?,?)",
-        (turma_id, (f.get("disciplina") or "").strip()[:120], inicio, tol, corte, t))
+    # se existe a aula do dia na agenda da turma, é ela que vale
+    do_dia = None
+    for cand in con.execute("SELECT * FROM aulas WHERE turma_id=? AND status='agendada' AND data_ref=? ORDER BY id",
+                            (turma_id, hoje().isoformat())):
+        if not disciplina or chave(cand["disciplina"]) == chave(disciplina):
+            do_dia = cand
+            break
+    if do_dia is not None:
+        con.execute("UPDATE aulas SET status='aberta', inicio=?, tolerancia_min=?, corte_min=?, criada_em=?, "
+                    "encerrada_em=NULL WHERE id=?", (inicio, tol, corte, t, do_dia["id"]))
+        aula_id = do_dia["id"]
+    else:
+        cur = con.execute(
+            "INSERT INTO aulas(turma_id,disciplina,inicio,tolerancia_min,corte_min,criada_em,data_ref) "
+            "VALUES (?,?,?,?,?,?,?)", (turma_id, disciplina, inicio, tol, corte, t, hoje().isoformat()))
+        aula_id = cur.lastrowid
     con.commit()
-    return redirect(url_for("prof_aula", aula_id=cur.lastrowid))
+    return redirect(url_for("prof_aula", aula_id=aula_id))
 
 
 def get_aula(aula_id):
@@ -497,7 +712,7 @@ def calcular_estado(aula_id):
         "SELECT s.id, s.ts, s.motivo, a.nome, a.matricula FROM saidas s JOIN alunos a ON a.id=s.aluno_id "
         "WHERE s.aula_id=? ORDER BY s.ts", (aula_id,)).fetchall()
 
-    nao_leram, atrasados, atencao, nao_assinam = [], [], [], []
+    nao_leram, atrasados, atencao, nao_assinam, entraram = [], [], [], [], []
     no_horario = 0
     for al in alunos:
         base = {"id": al["id"], "matricula": al["matricula"], "nome": al["nome"]}
@@ -509,9 +724,11 @@ def calcular_estado(aula_id):
         st = status_de(lt["atraso_min"], aula)
         item = dict(base, chegada=hm(lt["ts"]), atraso_min=lt["atraso_min"],
                     atraso_txt=fmt_atraso(lt["atraso_min"]), status=st,
-                    autorizado=lt["autorizado"], manual=bool(lt["manual"]))
+                    autorizado=lt["autorizado"], manual=bool(lt["manual"]),
+                    local=(None if lt["manual"] else lt["lat"] is not None))
         if st == "ok":
             no_horario += 1
+            entraram.append(item)
         else:
             atrasados.append(item)
         if st == "bloqueado":
@@ -530,8 +747,10 @@ def calcular_estado(aula_id):
             atencao.append(dict(item, flags=flags))
 
     agora = now()
+    curso = info_curso(con, aula)
     return {
         "aula": {"id": aula["id"], "turma": aula["turma"], "disciplina": aula["disciplina"] or "",
+                 "assunto": aula["assunto"] or "", "curso": curso,
                  "data": dmy(aula["inicio"]), "inicio": hm(aula["inicio"]),
                  "tolerancia_min": aula["tolerancia_min"], "corte_min": aula["corte_min"],
                  "corte_txt": fmt_atraso(aula["corte_min"]),
@@ -542,7 +761,7 @@ def calcular_estado(aula_id):
                    "nao_leram": len(nao_leram), "nao_assinam": len(nao_assinam),
                    "a_conferir": sum(1 for a in atrasados if a["status"] == "atrasado" and a["autorizado"] is None)},
         "nao_leram": nao_leram, "atrasados": atrasados, "atencao": atencao,
-        "nao_assinam": nao_assinam,
+        "entraram": entraram, "nao_assinam": nao_assinam,
         "saidas": [{"id": s["id"], "nome": s["nome"], "matricula": s["matricula"],
                     "hora": hm(s["ts"]), "motivo": s["motivo"] or ""} for s in saidas],
         "alunos": [{"id": a["id"], "nome": a["nome"]} for a in alunos],
@@ -709,7 +928,11 @@ def prof_turma(tid):
         flash("%d novo(s), %d atualizado(s), %d linha(s) ignorada(s)." % (n, u, i), "ok")
         return redirect(url_for("prof_turma", tid=tid))
     alunos = con.execute("SELECT * FROM alunos WHERE turma_id=? ORDER BY LOWER(nome)", (tid,)).fetchall()
-    return render_template("turma.html", turma=turma, alunos=alunos)
+    loc = {r["aluno_id"]: r for r in con.execute(
+        "SELECT aluno_id, COUNT(*) AS n, SUM(CASE WHEN lat IS NOT NULL THEN 1 ELSE 0 END) AS com, "
+        "SUM(fora) AS fora FROM leituras WHERE manual=0 AND aluno_id IN "
+        "(SELECT id FROM alunos WHERE turma_id=?) GROUP BY aluno_id", (tid,))}
+    return render_template("turma.html", turma=turma, alunos=alunos, loc=loc, geofence=GEOFENCE)
 
 
 @app.post("/prof/alunos/<int:aid>/liberar")
@@ -751,7 +974,12 @@ def resumo_texto(e):
     a = e["aula"]
     linhas = ["Ata de frequência — %s — %s" % (a["turma"], a["disciplina"] or "sem disciplina informada"),
               "Data: %s | Início: %s | Tolerância: %d min | Corte: %s (até %s)" %
-              (a["data"], a["inicio"], a["tolerancia_min"], a["corte_txt"], a["limite"]), ""]
+              (a["data"], a["inicio"], a["tolerancia_min"], a["corte_txt"], a["limite"])]
+    if a.get("assunto"):
+        linhas.append("Assunto: %s" % a["assunto"])
+    if a.get("curso"):
+        linhas.append("%s · %s" % (a["curso"]["posicao"], a["curso"]["texto"]))
+    linhas.append("")
     linhas.append("ATRASADOS (%d)" % len(e["atrasados"]))
     for x in e["atrasados"]:
         aut = {1: "autorização apresentada", 0: "SEM autorização", None: "autorização não conferida"}[x["autorizado"]]
@@ -800,6 +1028,308 @@ def prof_relatorio_csv(aula_id):
                                       e["aula"]["data"].replace("/", "-"))
     return Response("﻿" + buf.getvalue(), mimetype="text/csv; charset=utf-8",
                     headers={"Content-Disposition": 'attachment; filename="%s"' % nome})
+
+
+# ------------------------------------------------------------ professor: agenda
+def ler_texto_enviado():
+    """Texto colado no formulário ou arquivo enviado (csv/tsv/txt)."""
+    texto = request.form.get("lista") or ""
+    arq = request.files.get("arquivo")
+    if arq and arq.filename:
+        bruto = arq.read(256 * 1024)
+        try:
+            texto = bruto.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            texto = bruto.decode("latin-1")
+    return texto
+
+
+def detectar_sep(linha):
+    return "\t" if "\t" in linha else (";" if ";" in linha else ",")
+
+
+def parse_tabela_disciplinas(texto, ignorar_finalizadas=True):
+    """Aceita a aba 'Alocações' da planilha (com cabeçalho) ou colunas simples.
+    Devolve (linhas, ignoradas); cada linha é um dict."""
+    linhas = [l for l in (texto or "").splitlines() if l.strip()]
+    if not linhas:
+        return [], 0
+    rows = list(csv.reader(linhas, delimiter=detectar_sep(linhas[0])))
+    mapa = {}
+    sinonimos = {"turma": "turma", "turno": "turno", "dsem": "dias", "dias": "dias", "dia": "dias",
+                 "diasdasemana": "dias", "inicio": "ini", "fim": "fim", "materia": "nome",
+                 "disciplina": "nome", "enc": "enc", "encontros": "enc", "hora": "hora",
+                 "horario": "hora", "status": "status", "excluir": "excluir"}
+    if chave(rows[0][0]) == "turma":
+        for i, c in enumerate(rows[0]):
+            k = sinonimos.get(chave(c))
+            if k and k not in mapa:
+                mapa[k] = i
+        rows = rows[1:]
+    elif len(rows[0]) >= 8:  # ordem da planilha, sem cabeçalho
+        mapa = dict(turma=0, turno=1, dias=2, ini=3, fim=4, nome=6, enc=7)
+    else:
+        mapa = dict(turma=0, dias=1, ini=2, fim=3, nome=4, enc=5)
+    saida, ignoradas = [], 0
+    for r in rows:
+        def cel(k):
+            i = mapa.get(k)
+            return r[i].strip() if i is not None and i < len(r) else ""
+        if not cel("turma") or not cel("nome"):
+            ignoradas += 1
+            continue
+        if cel("excluir") or (ignorar_finalizadas and chave(cel("status")) == "finalizado"):
+            ignoradas += 1
+            continue
+        saida.append({k: cel(k) for k in ("turma", "turno", "dias", "ini", "fim", "nome", "enc", "hora")})
+    return saida, ignoradas
+
+
+def importar_disciplinas(texto, ignorar_finalizadas=True):
+    con = db()
+    linhas, ignoradas = parse_tabela_disciplinas(texto, ignorar_finalizadas)
+    ok, avisos = 0, []
+    for l in linhas:
+        bom, msg = salvar_disciplina(con, l["turma"], l["turno"], l["dias"], l["ini"], l["fim"],
+                                     l["nome"], l["enc"], l["hora"])
+        if bom:
+            ok += 1
+        avisos.append(("" if bom else "ERRO — ") + msg)
+    con.commit()
+    return ok, ignoradas, avisos
+
+
+def importar_alunos_multi(texto):
+    """Linhas 'turma; matrícula; nome' (separador tab, ; ou ,)."""
+    con = db()
+    linhas = [l for l in (texto or "").splitlines() if l.strip()]
+    novos = atualizados = ignoradas = 0
+    if not linhas:
+        return 0, 0, 0
+    sep = detectar_sep(linhas[0])
+    for r in csv.reader(linhas, delimiter=sep):
+        if r and chave(r[0]) == "turma":  # cabeçalho
+            continue
+        if len(r) < 3:
+            ignoradas += 1
+            continue
+        turma_nome, mat, nome = norm_turma(r[0]), norm_mat(r[1]), norm_nome(r[2])
+        if not turma_nome or len(mat) < 4 or not nome:
+            ignoradas += 1
+            continue
+        turma = obter_turma(con, turma_nome)
+        ex = con.execute("SELECT id FROM alunos WHERE matricula=?", (mat,)).fetchone()
+        if ex:
+            con.execute("UPDATE alunos SET nome=?, turma_id=?, fora_lista=0 WHERE id=?",
+                        (nome, turma["id"], ex["id"]))
+            atualizados += 1
+        else:
+            con.execute("INSERT INTO alunos(matricula,nome,turma_id) VALUES (?,?,?)",
+                        (mat, nome, turma["id"]))
+            novos += 1
+    con.commit()
+    return novos, atualizados, ignoradas
+
+
+@app.get("/prof/agenda")
+@login_required
+def prof_agenda():
+    con = db()
+    hj = hoje()
+    turma_id = request.args.get("turma", type=int)
+    todas = request.args.get("todas") == "1"
+    turmas = con.execute("SELECT id, nome FROM turmas ORDER BY nome").fetchall()
+    sql = ("SELECT d.*, t.nome AS turma, t.turno AS turno FROM disciplinas d "
+           "JOIN turmas t ON t.id=d.turma_id WHERE 1=1 ")
+    par = []
+    if turma_id:
+        sql += "AND d.turma_id=? "
+        par.append(turma_id)
+    if not todas:
+        sql += "AND d.data_fim>=? "
+        par.append((hj - timedelta(days=7)).isoformat())
+    sql += "ORDER BY t.nome, d.data_ini, d.nome"
+    discs = []
+    for d in con.execute(sql, par).fetchall():
+        aulas = []
+        for a in con.execute(
+                "SELECT a.*, (SELECT COUNT(*) FROM leituras l WHERE l.aula_id=a.id) AS leram "
+                "FROM aulas a WHERE a.disciplina_id=? ORDER BY a.data_ref, a.id", (d["id"],)):
+            dt = parse_data(a["data_ref"])
+            aulas.append(dict(a, dia=("%s %s" % (NOMES_DIA[dt.weekday()], dt.strftime("%d/%m"))) if dt else "",
+                              hoje=(a["data_ref"] == hj.isoformat())))
+        fim, ini = parse_data(d["data_fim"]), parse_data(d["data_ini"])
+        discs.append({"d": d, "aulas": aulas,
+                      "periodo": "%s a %s" % (ini.strftime("%d/%m/%Y") if ini else "?",
+                                              fim.strftime("%d/%m/%Y") if fim else "?"),
+                      "em_curso": bool(ini and fim and ini <= hj <= fim)})
+    de_hoje = con.execute(
+        "SELECT a.*, t.nome AS turma, d.hora_inicio AS hora FROM aulas a JOIN turmas t ON t.id=a.turma_id "
+        "LEFT JOIN disciplinas d ON d.id=a.disciplina_id WHERE a.data_ref=? AND a.status IN ('agendada','aberta') "
+        "ORDER BY t.nome", (hj.isoformat(),)).fetchall()
+    return render_template("agenda.html", discs=discs, turmas=turmas, turma_id=turma_id, todas=todas,
+                           de_hoje=de_hoje, hm=hm, hoje=hj.isoformat(),
+                           caminho=request.full_path.rstrip("?"))
+
+
+@app.post("/prof/agenda/<int:aula_id>/abrir")
+@login_required
+def prof_agenda_abrir(aula_id):
+    con = db()
+    aula = con.execute("SELECT * FROM aulas WHERE id=?", (aula_id,)).fetchone()
+    if aula is None or aula["status"] == "encerrada":
+        abort(404)
+    f = request.form
+    try:
+        tol = max(0, min(600, int(f.get("tolerancia") or TOLERANCIA_PADRAO)))
+        corte = max(1, min(600, int(f.get("corte") or CORTE_PADRAO)))
+    except ValueError:
+        abort(400)
+    t = now()
+    inicio = parse_hm(f.get("inicio")) or t
+    con.execute("UPDATE aulas SET status='encerrada', encerrada_em=? WHERE turma_id=? AND status='aberta' AND id<>?",
+                (t, aula["turma_id"], aula_id))
+    con.execute("UPDATE aulas SET status='aberta', inicio=?, tolerancia_min=?, corte_min=?, criada_em=?, "
+                "encerrada_em=NULL WHERE id=?", (inicio, tol, corte, t, aula_id))
+    con.commit()
+    return redirect(url_for("prof_aula", aula_id=aula_id))
+
+
+@app.post("/prof/agenda/<int:aula_id>/assunto")
+@login_required
+def prof_agenda_assunto(aula_id):
+    con = db()
+    if con.execute("SELECT 1 FROM aulas WHERE id=?", (aula_id,)).fetchone() is None:
+        abort(404)
+    con.execute("UPDATE aulas SET assunto=? WHERE id=?",
+                ((request.form.get("assunto") or "").strip()[:300], aula_id))
+    con.commit()
+    flash("Assunto salvo.", "ok")
+    return redirect(seguro_next(request.form.get("next")) + "#aula%d" % aula_id)
+
+
+@app.post("/prof/aula/<int:aula_id>/assunto")
+@login_required
+def prof_aula_assunto(aula_id):
+    get_aula(aula_id)
+    d = request.get_json(silent=True) or {}
+    con = db()
+    con.execute("UPDATE aulas SET assunto=? WHERE id=?", ((d.get("assunto") or "").strip()[:300], aula_id))
+    con.commit()
+    return jsonify(ok=True)
+
+
+@app.post("/prof/agenda/disciplina/<int:did>/adicionar")
+@login_required
+def prof_agenda_adicionar(did):
+    con = db()
+    disc = con.execute("SELECT * FROM disciplinas WHERE id=?", (did,)).fetchone()
+    if disc is None:
+        abort(404)
+    d = parse_data(request.form.get("data"))
+    if d is None:
+        flash("Data inválida.", "erro")
+    elif con.execute("SELECT 1 FROM aulas WHERE disciplina_id=? AND data_ref=?", (did, d.isoformat())).fetchone():
+        flash("Já existe aula nessa data.", "erro")
+    else:
+        con.execute("INSERT INTO aulas(turma_id,disciplina,inicio,status,criada_em,disciplina_id,data_ref) "
+                    "VALUES (?,?,?,'agendada',?,?,?)",
+                    (disc["turma_id"], disc["nome"], epoch_do_dia(d, disc["hora_inicio"]), now(), did, d.isoformat()))
+        renumerar(con, did)
+        con.commit()
+        flash("Aula de %s adicionada." % d.strftime("%d/%m/%Y"), "ok")
+    return redirect(seguro_next(request.form.get("next")))
+
+
+@app.post("/prof/agenda/<int:aula_id>/remover")
+@login_required
+def prof_agenda_remover(aula_id):
+    con = db()
+    aula = con.execute("SELECT * FROM aulas WHERE id=?", (aula_id,)).fetchone()
+    if aula is None:
+        abort(404)
+    tem = con.execute("SELECT 1 FROM leituras WHERE aula_id=?", (aula_id,)).fetchone()
+    if aula["status"] != "agendada" or tem:
+        flash("Só dá para remover aulas ainda não abertas.", "erro")
+    else:
+        con.execute("DELETE FROM aulas WHERE id=?", (aula_id,))
+        if aula["disciplina_id"]:
+            renumerar(con, aula["disciplina_id"])
+        con.commit()
+        flash("Aula removida.", "ok")
+    return redirect(seguro_next(request.form.get("next")))
+
+
+# ------------------------------------------------------------ professor: importar
+@app.get("/prof/importar")
+@login_required
+def prof_importar():
+    turmas = db().execute("SELECT id, nome FROM turmas ORDER BY nome").fetchall()
+    return render_template("importar.html", turmas=turmas)
+
+
+@app.post("/prof/importar/<tipo>")
+@login_required
+def prof_importar_acao(tipo):
+    con = db()
+    if tipo == "turmas":
+        n = 0
+        for linha in ler_texto_enviado().splitlines():
+            partes = [p.strip() for p in re.split(r"[;\t]", linha)]
+            if partes and partes[0]:
+                obter_turma(con, partes[0], partes[1] if len(partes) > 1 else None)
+                n += 1
+        con.commit()
+        flash("%d turma(s) processada(s)." % n, "ok")
+    elif tipo == "alunos":
+        texto = ler_texto_enviado()
+        if request.form.get("com_turma"):
+            n, u, i = importar_alunos_multi(texto)
+        else:
+            nome = norm_turma(request.form.get("turma_nova")) or ""
+            if nome:
+                turma_id = obter_turma(con, nome)["id"]
+                con.commit()
+            else:
+                turma_id = request.form.get("turma_id", type=int)
+            if not turma_id or con.execute("SELECT 1 FROM turmas WHERE id=?", (turma_id,)).fetchone() is None:
+                flash("Escolha ou informe a turma.", "erro")
+                return redirect(url_for("prof_importar"))
+            n, u, i = importar_roster(turma_id, texto)
+        flash("Alunos: %d novo(s), %d atualizado(s), %d linha(s) ignorada(s)." % (n, u, i), "ok")
+    elif tipo == "disciplinas":
+        ok, ign, avisos = importar_disciplinas(ler_texto_enviado(), ignorar_finalizadas=bool(request.form.get("so_ativas")))
+        flash("Disciplinas: %d importada(s), %d linha(s) ignorada(s)." % (ok, ign), "ok" if ok else "erro")
+        for a in avisos[:30]:
+            flash(a, "erro" if a.startswith("ERRO") else "ok")
+    elif tipo == "manual":
+        f = request.form
+        ok, msg = salvar_disciplina(con, f.get("turma"), f.get("turno"), f.get("dias"), f.get("ini"),
+                                    f.get("fim"), f.get("nome"), f.get("enc"), f.get("hora"))
+        con.commit()
+        flash(msg if ok else "Não foi possível: " + msg, "ok" if ok else "erro")
+    else:
+        abort(404)
+    return redirect(url_for("prof_importar") if tipo != "disciplinas" else url_for("prof_agenda"))
+
+
+@app.post("/prof/alunos/<int:aid>/editar")
+@login_required
+def prof_editar_aluno(aid):
+    con = db()
+    al = con.execute("SELECT * FROM alunos WHERE id=?", (aid,)).fetchone()
+    if al is None:
+        abort(404)
+    nome, mat = norm_nome(request.form.get("nome")), norm_mat(request.form.get("matricula"))
+    if not nome or len(mat) < 4:
+        flash("Informe o nome e uma matrícula válida.", "erro")
+    elif mat != al["matricula"] and con.execute("SELECT 1 FROM alunos WHERE matricula=?", (mat,)).fetchone():
+        flash("Já existe outro aluno com a matrícula %s." % mat, "erro")
+    else:
+        con.execute("UPDATE alunos SET nome=?, matricula=? WHERE id=?", (nome, mat, aid))
+        con.commit()
+        flash("Aluno atualizado.", "ok")
+    return redirect(url_for("prof_turma", tid=al["turma_id"]))
 
 
 if __name__ == "__main__":
