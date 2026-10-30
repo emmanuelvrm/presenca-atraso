@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Unidade{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Unidade</h1>
+<p class="muted">Duas checagens extras na leitura do QR: <b>localização (GPS)</b> e <b>Wi-Fi da escola</b> (pelo IP do aparelho).</p>
+
+<section class="card">
+  <h2>📍 Local da escola</h2>
+  <p>Posição usada: <code>{{ '%.5f'|format(lat) }}, {{ '%.5f'|format(lng) }}</code> · raio de <b>{{ raio }} m</b> · origem: {{ origem }}.</p>
+  <p class="muted">Leituras dentro do raio são <b>válidas</b>. Fora do raio (ou sem GPS) ficam <b>inválidas</b> e aparecem em "Atenção" para você validar ou recusar.
+    Para a posição ficar exata, abra esta página <b>dentro da escola</b> e toque no botão.</p>
+  <div class="row">
+    <label>Raio (metros) <input id="u-raio" type="number" min="50" max="5000" value="{{ raio }}"></label>
+  </div>
+  <button class="btn" id="u-gps" type="button">Usar minha localização atual como a escola</button>
+  <p id="u-msg" class="muted" role="status"></p>
+</section>
+
+<section class="card">
+  <h2>📶 Wi-Fi da escola (Grau Alunos)</h2>
+  <p>O navegador não consegue ler o nome do Wi-Fi; por isso o app compara o <b>IP público</b> do aparelho com o IP da escola.
+    Conecte <b>este aparelho ao Wi-Fi “Grau Alunos”</b> e registre o IP abaixo.</p>
+  <p>Seu IP agora: <code>{{ meu_ip or 'desconhecido' }}</code>
+    {% if meu_ip_escola %}<span class="badge ok">📶 já é da escola</span>{% else %}<span class="badge gray">não registrado</span>{% endif %}</p>
+  <form method="post" action="{{ url_for('prof_unidade_rede') }}" class="btns">
+    <input name="rotulo" value="Grau Alunos" maxlength="60" style="width:200px;margin:0" aria-label="Nome da rede">
+    <button class="btn" type="submit">Registrar este IP como Wi-Fi da escola</button>
+  </form>
+  <h3>IPs registrados</h3>
+  <ul class="lista">
+    {% for r in redes %}<li><span><code>{{ r.ip }}</code> · {{ r.rotulo }}</span>
+      <form method="post" action="{{ url_for('prof_unidade_rede') }}"><input type="hidden" name="ip" value="{{ r.ip }}"><input type="hidden" name="acao" value="remover">
+        <button class="btn sec sm" type="submit">Remover</button></form></li>
+    {% endfor %}
+    {% for ip in env_ips %}<li><span><code>{{ ip }}</code> · definido em ESCOLA_IPS</span></li>{% endfor %}
+    {% if not redes and not env_ips %}<li class="vazio">Nenhum IP registrado: todas as leituras aparecerão sem o ícone de Wi-Fi.</li>{% endif %}
+  </ul>
+  <p class="muted">Se a internet da escola trocar de IP, registre de novo. Alunos usando dados móveis não terão o ícone 📶.</p>
+</section>
+<script>
+  document.getElementById('u-gps').addEventListener('click', function () {
+    var m = document.getElementById('u-msg');
+    if (!navigator.geolocation) { m.textContent = 'Este navegador não tem GPS.'; return; }
+    m.textContent = 'Obtendo localização…';
+    navigator.geolocation.getCurrentPosition(function (p) {
+      fetch('{{ url_for("prof_unidade_local") }}', { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude, raio: document.getElementById('u-raio').value }) })
+        .then(function (r) { return r.json(); }).then(function (j) {
+          m.textContent = j.ok ? 'Salvo (precisão do GPS: ' + Math.round(p.coords.accuracy) + ' m). Recarregando…' : (j.msg || 'Erro.');
+          if (j.ok) { setTimeout(function () { location.reload(); }, 900); }
+        });
+    }, function () { m.textContent = 'Não foi possível obter a localização (permita o acesso).'; }, { enableHighAccuracy: true, timeout: 20000 });
+  });
+</script>
+{% endblock %}

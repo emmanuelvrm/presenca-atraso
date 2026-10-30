@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Importar{% endblock %}
 {% block nav %}{% include "_nav.html" %}{% endblock %}
+{% from "_periodo.html" import periodo with context %}
 {% block content %}
 <h1>Importar</h1>
 
@@ -83,13 +84,9 @@
       <label>Hora de início <input name="hora" type="time"></label>
     </div>
     <label>Disciplina <input name="nome" required maxlength="120"></label>
-    <div class="row">
-      <label>Dias da semana <input name="dias" required placeholder="seg,qua,sex"></label>
-      <label>Primeira aula <input name="ini" required placeholder="dd/mm/aaaa"></label>
-      <label>Última aula / prova <input name="fim" required placeholder="dd/mm/aaaa"></label>
-      <label>Nº de encontros <input name="enc" type="number" min="1" max="200"></label>
-    </div>
+    {{ periodo(rotulo_ini="Primeira aula", rotulo_fim="Última aula / prova") }}
     <button class="btn" type="submit">Salvar disciplina</button>
   </form>
 </section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='periodo.js') }}"></script>{% endblock %}

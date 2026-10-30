@@ -58,8 +58,12 @@ TOLERANCIA_PADRAO = int(os.environ.get("TOLERANCIA_MIN", "10"))
 CORTE_PADRAO = int(os.environ.get("CORTE_MIN", "90"))
 UNI_LAT = float(os.environ["UNIDADE_LAT"]) if os.environ.get("UNIDADE_LAT") else None
 UNI_LNG = float(os.environ["UNIDADE_LNG"]) if os.environ.get("UNIDADE_LNG") else None
-RAIO_M = float(os.environ.get("RAIO_M", "250"))
-GEOFENCE = UNI_LAT is not None and UNI_LNG is not None
+RAIO_M = float(os.environ.get("RAIO_M", "300"))
+# Padrão: Av. Padre Pedro Pinto, 1500 (Venda Nova, BH) — posição aproximada; o professor ajusta em
+# "Unidade" usando o GPS do próprio celular dentro da escola.
+UNI_LAT_PADRAO, UNI_LNG_PADRAO = -19.8162, -43.9510
+ESCOLA_IPS = [x.strip() for x in os.environ.get("ESCOLA_IPS", "").split(",") if x.strip()]
+GEOFENCE = True
 
 app = Flask(__name__)
 app.config.update(
@@ -96,6 +100,8 @@ CREATE TABLE IF NOT EXISTS leituras(
   ts {BIG} NOT NULL, atraso_min INTEGER NOT NULL, manual INTEGER NOT NULL DEFAULT 0,
   autorizado INTEGER, lat {REAL}, lng {REAL}, dist_m {REAL}, fora INTEGER NOT NULL DEFAULT 0,
   UNIQUE(aula_id, aluno_id));
+CREATE TABLE IF NOT EXISTS config(chave TEXT PRIMARY KEY, valor TEXT);
+CREATE TABLE IF NOT EXISTS redes_escola(ip TEXT PRIMARY KEY, rotulo TEXT, criada {BIG});
 CREATE TABLE IF NOT EXISTS saidas(
   id {PK}, aula_id INTEGER NOT NULL REFERENCES aulas(id),
   aluno_id INTEGER NOT NULL REFERENCES alunos(id), ts {BIG} NOT NULL, motivo TEXT);
@@ -112,6 +118,9 @@ COLUNAS_NOVAS = [
     ("aulas", "numero", "INTEGER"),
     ("aulas", "data_ref", "TEXT"),
     ("aulas", "assunto", "TEXT"),
+    ("leituras", "ip", "TEXT"),
+    ("leituras", "wifi", "INTEGER"),
+    ("leituras", "local_ok", "INTEGER"),
 ]
 
 
@@ -279,8 +288,34 @@ def haversine(lat1, lng1, lat2, lng2):
     return 2 * r * math.asin(math.sqrt(a))
 
 
+def cfg_get(con, chave):
+    r = con.execute("SELECT valor FROM config WHERE chave=?", (chave,)).fetchone()
+    return r["valor"] if r else None
+
+
+def cfg_set(con, chave, valor):
+    con.execute("INSERT INTO config(chave,valor) VALUES (?,?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor",
+                (chave, str(valor)))
+    con.commit()
+
+
+def unidade(con=None):
+    """(lat, lng, raio_m, origem) da escola: ajustada pelo professor > variáveis de ambiente > padrão."""
+    con = con or db()
+    try:
+        lat, lng = cfg_get(con, "uni_lat"), cfg_get(con, "uni_lng")
+        raio = cfg_get(con, "raio_m")
+        if lat and lng:
+            return float(lat), float(lng), float(raio or RAIO_M), "ajustada pelo professor"
+    except (ValueError, TypeError):
+        pass
+    if UNI_LAT is not None and UNI_LNG is not None:
+        return UNI_LAT, UNI_LNG, RAIO_M, "variáveis de ambiente"
+    return UNI_LAT_PADRAO, UNI_LNG_PADRAO, RAIO_M, "padrão (Av. Padre Pedro Pinto, 1500)"
+
+
 def avaliar_geo(geo):
-    """Devolve (lat, lng, dist_m, fora). Só marca 'fora' se a unidade estiver configurada."""
+    """Devolve (lat, lng, dist_m, fora). fora=1 quando não há GPS ou o GPS está além do raio da escola."""
     lat = lng = dist = None
     if isinstance(geo, dict):
         try:
@@ -289,14 +324,49 @@ def avaliar_geo(geo):
             lat = lng = None
         if lat is not None and not (-90 <= lat <= 90 and -180 <= lng <= 180):
             lat = lng = None
-    fora = 0
-    if GEOFENCE:
-        if lat is None:
-            fora = 1
-        else:
-            dist = haversine(lat, lng, UNI_LAT, UNI_LNG)
-            fora = 1 if dist > RAIO_M else 0
-    return lat, lng, dist, fora
+    ulat, ulng, raio, _ = unidade()
+    if lat is None:
+        return None, None, None, 1
+    dist = haversine(lat, lng, ulat, ulng)
+    return lat, lng, dist, (1 if dist > raio else 0)
+
+
+def cliente_ip():
+    for h in ("CF-Connecting-IP", "X-Real-IP"):
+        v = (request.headers.get(h) or "").strip()
+        if v:
+            return v[:60]
+    xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return (xff or request.remote_addr or "")[:60]
+
+
+def _rede_ip(ip):
+    """IPv4 exato; IPv6 pelo prefixo /64 (os 4 primeiros blocos)."""
+    ip = (ip or "").strip().lower()
+    if ":" in ip:
+        return ":".join(ip.split(":")[:4])
+    return ip
+
+
+def ip_da_escola(ip, con=None):
+    con = con or db()
+    r = _rede_ip(ip)
+    if not r:
+        return False
+    if r in {_rede_ip(x) for x in ESCOLA_IPS}:
+        return True
+    return any(_rede_ip(x["ip"]) == r for x in con.execute("SELECT ip FROM redes_escola"))
+
+
+def estado_local(lt):
+    """valido | validado (professor aceitou) | recusado (professor recusou) | invalido (aguarda o professor)."""
+    if not lt["fora"]:
+        return "valido"
+    if lt["local_ok"] == 1:
+        return "validado"
+    if lt["local_ok"] == 0:
+        return "recusado"
+    return "invalido"
 
 
 def url_entrada():
@@ -405,6 +475,37 @@ def gerar_datas(dias, ini, fim):
     return out
 
 
+def fim_por_encontros(dias, ini, enc):
+    """Data da última aula: conta `enc` dias de aula a partir de ini (pula feriados). None se não der."""
+    if not dias or ini is None or not enc or enc < 1:
+        return None
+    n, d = 0, ini
+    while (d - ini).days <= 800:
+        if d.weekday() in dias and d.isoformat() not in FERIADOS:
+            n += 1
+            if n == enc:
+                return d
+        d += timedelta(days=1)
+    return None
+
+
+def dias_form(f):
+    """Dias vindos dos checkboxes (vários 'dias') ou de texto livre."""
+    if hasattr(f, "getlist"):
+        v = [x for x in f.getlist("dias") if x]
+        if len(v) > 1:
+            return ",".join(v)
+        if v:
+            return v[0]
+        return ""
+    return f.get("dias")
+
+
+@app.context_processor
+def _ctx_feriados():
+    return {"feriados": sorted(FERIADOS)}
+
+
 def epoch_do_dia(data, hhmm):
     m = re.fullmatch(r"(\d{1,2}):(\d{2})", hhmm or "")
     h, mi = (int(m.group(1)), int(m.group(2))) if m else (19, 0)
@@ -434,17 +535,19 @@ def salvar_disciplina(con, turma_nome, turno, dias_t, ini_t, fim_t, nome, encont
     nome = norm_nome(nome)
     dias = parse_dias(dias_t)
     ini = parse_data(ini_t)
+    try:
+        enc = int(str(encontros).strip()) if str(encontros or "").strip() else None
+    except ValueError:
+        enc = None
     fim = parse_data(fim_t, padrao_ano=ini.year if ini else None, depois_de=ini)
+    if fim is None and not (fim_t or "").strip():
+        fim = fim_por_encontros(dias, ini, enc)
     if not norm_turma(turma_nome) or not nome:
         return False, "turma e disciplina são obrigatórias"
     if not dias:
         return False, "dias da semana não reconhecidos (%r)" % dias_t
     if ini is None or fim is None or fim < ini:
         return False, "datas inválidas (%s a %s)" % (ini_t, fim_t)
-    try:
-        enc = int(str(encontros).strip()) if str(encontros or "").strip() else None
-    except ValueError:
-        enc = None
     turma = obter_turma(con, turma_nome, turno)
     hora = (hora or "").strip() or hora_do_turno(turma["turno"] or turno) or "19:00"
     con.execute("INSERT INTO disciplinas(turma_id,nome,dias,data_ini,data_fim,encontros,hora_inicio) "
@@ -660,9 +763,12 @@ def api_checkin():
         t = now()
         atraso = max(0, (t - aula["inicio"]) // 60)
         lat, lng, dist, fora = avaliar_geo(d.get("geo"))
+        ip = cliente_ip()
+        wifi = 1 if ip_da_escola(ip, con) else 0
         con.execute(
-            "INSERT INTO leituras(aula_id,aluno_id,ts,atraso_min,lat,lng,dist_m,fora) "
-            "VALUES (?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING", (aula["id"], aluno["id"], t, atraso, lat, lng, dist, fora))
+            "INSERT INTO leituras(aula_id,aluno_id,ts,atraso_min,lat,lng,dist_m,fora,ip,wifi) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+            (aula["id"], aluno["id"], t, atraso, lat, lng, dist, fora, ip, wifi))
         con.commit()
     lt = con.execute("SELECT * FROM leituras WHERE aula_id=? AND aluno_id=?",
                      (aula["id"], aluno["id"])).fetchone()
@@ -671,7 +777,8 @@ def api_checkin():
                    assunto=aula["assunto"] or "", curso=curso, data=dmy(aula["inicio"]),
                    inicio=hm(aula["inicio"]), chegada=hm(lt["ts"]), atraso_min=lt["atraso_min"],
                    atraso_txt=fmt_atraso(lt["atraso_min"]), status=status_de(lt["atraso_min"], aula),
-                   corte_txt=fmt_atraso(aula["corte_min"]))
+                   corte_txt=fmt_atraso(aula["corte_min"]),
+                   local=estado_local(lt), wifi=bool(lt["wifi"]), ip=lt["ip"] or "")
 
 
 @app.get("/qr.png")
@@ -778,7 +885,10 @@ def calcular_estado(aula_id):
         item = dict(base, chegada=hm(lt["ts"]), atraso_min=lt["atraso_min"],
                     atraso_txt=fmt_atraso(lt["atraso_min"]), status=st,
                     autorizado=lt["autorizado"], manual=bool(lt["manual"]),
-                    local=(None if lt["manual"] else lt["lat"] is not None))
+                    local=(None if lt["manual"] else lt["lat"] is not None),
+                    local_estado=(None if lt["manual"] else estado_local(lt)),
+                    dist_m=(None if lt["dist_m"] is None else int(round(lt["dist_m"]))),
+                    wifi=(None if lt["manual"] else bool(lt["wifi"])), ip=lt["ip"] or "")
         if st == "ok":
             no_horario += 1
             entraram.append(item)
@@ -792,8 +902,13 @@ def calcular_estado(aula_id):
                       else "Atrasado, autorização ainda não conferida")
             nao_assinam.append(dict(base, motivo=motivo))
         flags = []
-        if lt["fora"]:
-            flags.append("leitura fora da unidade ou sem localização")
+        if item["local_estado"] == "invalido":
+            flags.append("local INVÁLIDO" + (" (%d m da escola)" % item["dist_m"] if item["dist_m"] is not None else " (sem GPS)")
+                         + " — valide ou recuse")
+        elif item["local_estado"] == "recusado":
+            flags.append("local recusado por você")
+        elif item["local_estado"] == "validado":
+            flags.append("local validado por você")
         if al["fora_lista"]:
             flags.append("matrícula fora da lista da turma")
         if flags:
@@ -832,6 +947,64 @@ def prof_estado(aula_id):
 def aluno_da_turma(aula, aluno_id):
     return db().execute("SELECT * FROM alunos WHERE id=? AND turma_id=?",
                         (aluno_id, aula["turma_id"])).fetchone()
+
+
+@app.post("/prof/aula/<int:aula_id>/local")
+@login_required
+def prof_local(aula_id):
+    d = request.get_json(silent=True) or {}
+    valor = d.get("valor")
+    if valor not in (1, 0, None):
+        return jsonify(ok=False, msg="Valor inválido."), 400
+    con = db()
+    cur = con.execute("UPDATE leituras SET local_ok=? WHERE aula_id=? AND aluno_id=?",
+                      (valor, aula_id, d.get("aluno_id")))
+    con.commit()
+    return jsonify(ok=cur.rowcount == 1)
+
+
+@app.get("/prof/unidade")
+@login_required
+def prof_unidade():
+    con = db()
+    lat, lng, raio, origem = unidade(con)
+    redes = con.execute("SELECT * FROM redes_escola ORDER BY criada").fetchall()
+    return render_template("unidade.html", lat=lat, lng=lng, raio=int(raio), origem=origem, redes=redes,
+                           env_ips=ESCOLA_IPS, meu_ip=cliente_ip(), meu_ip_escola=ip_da_escola(cliente_ip(), con))
+
+
+@app.post("/prof/unidade/local")
+@login_required
+def prof_unidade_local():
+    f = request.get_json(silent=True) or request.form
+    con = db()
+    try:
+        lat, lng = float(f.get("lat")), float(f.get("lng"))
+        raio = float(f.get("raio") or RAIO_M)
+    except (TypeError, ValueError):
+        return jsonify(ok=False, msg="Coordenadas inválidas."), 400
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180) or not (50 <= raio <= 5000):
+        return jsonify(ok=False, msg="Valores fora do intervalo (raio de 50 a 5000 m)."), 400
+    cfg_set(con, "uni_lat", lat)
+    cfg_set(con, "uni_lng", lng)
+    cfg_set(con, "raio_m", raio)
+    return jsonify(ok=True)
+
+
+@app.post("/prof/unidade/rede")
+@login_required
+def prof_unidade_rede():
+    con = db()
+    ip = request.form.get("ip") or cliente_ip()
+    if request.form.get("acao") == "remover":
+        con.execute("DELETE FROM redes_escola WHERE ip=?", (ip,))
+        flash("Rede removida.", "ok")
+    else:
+        con.execute("INSERT INTO redes_escola(ip,rotulo,criada) VALUES (?,?,?) ON CONFLICT DO NOTHING",
+                    (_rede_ip(ip), (request.form.get("rotulo") or "Grau Alunos")[:60], now()))
+        flash("IP %s registrado como Wi-Fi da escola." % ip, "ok")
+    con.commit()
+    return redirect(url_for("prof_unidade"))
 
 
 @app.post("/prof/aula/<int:aula_id>/autorizacao")
@@ -1404,7 +1577,7 @@ def prof_disciplina_criar():
     if turma is None:
         flash("Cadastre a turma antes e escolha-a na lista.", "erro")
         return redirect(url_for("prof_disciplinas"))
-    ok, msg = salvar_disciplina(con, turma["nome"], turma["turno"], f.get("dias"), f.get("ini"), f.get("fim"),
+    ok, msg = salvar_disciplina(con, turma["nome"], turma["turno"], dias_form(f), f.get("ini"), f.get("fim"),
                                 f.get("nome"), f.get("enc"), f.get("hora"))
     if not ok:
         flash("Não foi possível: " + msg, "erro")
@@ -1435,7 +1608,7 @@ def prof_disciplina(did):
     ini, fim = parse_data(d["data_ini"]), parse_data(d["data_fim"])
     n_alunos = con.execute("SELECT COUNT(*) AS n FROM alunos WHERE turma_id=?", (d["turma_id"],)).fetchone()["n"]
     return render_template("disciplina.html", d=d, aulas=aulas, cron=cron, n_alunos=n_alunos,
-                           ini=ini.strftime("%d/%m/%Y") if ini else "", fim=fim.strftime("%d/%m/%Y") if fim else "",
+                           ini=ini.isoformat() if ini else "", fim=fim.isoformat() if fim else "", dias_sel=parse_dias(d["dias"]),
                            caminho=url_for("prof_disciplina", did=did))
 
 
@@ -1445,9 +1618,11 @@ def prof_disciplina_editar(did):
     con = db()
     d = _disciplina_ou_404(con, did)
     f = request.form
-    dias = parse_dias(f.get("dias"))
+    dias = parse_dias(dias_form(f))
     ini = parse_data(f.get("ini"))
     fim = parse_data(f.get("fim"), padrao_ano=ini.year if ini else None, depois_de=ini)
+    if fim is None and not (f.get("fim") or "").strip():
+        fim = fim_por_encontros(dias, ini, f.get("enc", type=int))
     nome = norm_nome(f.get("nome")) or d["nome"]
     hora = (f.get("hora") or "").strip() or d["hora_inicio"]
     if not dias or ini is None or fim is None or fim < ini:
@@ -1600,7 +1775,7 @@ def prof_importar_acao(tipo):
             flash(a, "erro" if a.startswith("ERRO") else "ok")
     elif tipo == "manual":
         f = request.form
-        ok, msg = salvar_disciplina(con, f.get("turma"), f.get("turno"), f.get("dias"), f.get("ini"),
+        ok, msg = salvar_disciplina(con, f.get("turma"), f.get("turno"), dias_form(f), f.get("ini"),
                                     f.get("fim"), f.get("nome"), f.get("enc"), f.get("hora"))
         con.commit()
         flash(msg if ok else "Não foi possível: " + msg, "ok" if ok else "erro")

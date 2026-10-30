@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Disciplinas{% endblock %}
 {% block nav %}{% include "_nav.html" %}{% endblock %}
+{% from "_periodo.html" import periodo with context %}
 {% block content %}
 <h1>Disciplinas</h1>
 <p class="muted">Cadastre aqui a disciplina de cada turma, com data de início, data de fim e o cronograma (assunto de cada aula).
@@ -39,13 +40,8 @@
         <datalist id="disc-nomes">{% for n in nomes %}<option value="{{ n }}">{% endfor %}</datalist>
       </label>
     </div>
-    <div class="row">
-      <label>Data de início <input name="ini" required placeholder="dd/mm/aaaa"></label>
-      <label>Data de fim (prova) <input name="fim" required placeholder="dd/mm/aaaa"></label>
-      <label>Dias da semana <input name="dias" required placeholder="seg,qua,sex"></label>
-      <label>Hora de início <input name="hora" type="time"></label>
-      <label>Nº de encontros <input name="enc" type="number" min="1" max="200" id="d-enc"></label>
-    </div>
+    <div class="row"><label>Hora de início <input name="hora" type="time"></label></div>
+    {{ periodo() }}
     <label>Cronograma das aulas (opcional — pode preencher depois)
       <textarea name="cronograma" placeholder="Aula 1: Apresentação e instalação do ambiente&#10;Aula 2: Variáveis e tipos de dados&#10;Aula 3: Estruturas condicionais"></textarea>
     </label>
@@ -59,10 +55,11 @@
       var nome = document.getElementById('d-nome'), enc = document.getElementById('d-enc');
       nome.addEventListener('change', function () {
         var achou = cat.filter(function (c) { return c.nome === nome.value; })[0];
-        if (achou && !enc.value) enc.value = achou.encontros;
+        if (achou && !enc.value) { enc.value = achou.encontros; enc.dispatchEvent(new Event('input')); }
       });
     })();
   </script>
   {% endif %}
 </section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='periodo.js') }}"></script>{% endblock %}

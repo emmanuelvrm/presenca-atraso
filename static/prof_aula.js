@@ -45,6 +45,17 @@
   }
   function vazio(ul, texto) { var li = el('li', 'vazio', texto); ul.appendChild(li); }
 
+  // etiquetas de local (GPS) e Wi-Fi da escola
+  function marcas(x, d) {
+    var dist = x.dist_m != null ? ' (' + x.dist_m + ' m)' : '';
+    if (x.local_estado === 'valido') d.appendChild(badge('ok', '📍 local válido' + dist));
+    else if (x.local_estado === 'validado') d.appendChild(badge('ok', '📍 local validado por você' + dist));
+    else if (x.local_estado === 'recusado') d.appendChild(badge('bad', '📍 local recusado' + dist));
+    else if (x.local_estado === 'invalido') d.appendChild(badge('bad', '📍 local INVÁLIDO' + (x.dist_m != null ? dist : ' (sem GPS)')));
+    if (x.wifi === true) d.appendChild(badge('ok', '📶 Wi-Fi da escola'));
+    else if (x.wifi === false) d.appendChild(badge('gray', '📶 fora do Wi-Fi'));
+  }
+
   function desenhar(e) {
     ultimo = e;
     var a = e.aula, t = e.totais;
@@ -68,8 +79,7 @@
       var li = el('li');
       li.appendChild(quem(x, 'chegou ' + x.chegada + (x.manual ? ' · registro manual' : '')));
       var d = el('span', 'btns');
-      if (x.local === true) d.appendChild(badge('ok', '📍 local'));
-      else if (x.local === false) d.appendChild(badge('bad', '📍 sem local'));
+      marcas(x, d);
       li.appendChild(d);
       ul.appendChild(li);
     });
@@ -81,8 +91,7 @@
       var li = el('li');
       li.appendChild(quem(x, 'chegou ' + x.chegada + ' (+' + x.atraso_txt + ')' + (x.manual ? ' · registro manual' : '')));
       var d = el('span', 'btns');
-      if (x.local === true) d.appendChild(badge('ok', '📍 local'));
-      else if (x.local === false) d.appendChild(badge('bad', '📍 sem local'));
+      marcas(x, d);
       if (x.status === 'bloqueado') {
         d.appendChild(badge('bad', 'acima de ' + a.corte_txt + ' · não assina'));
       } else {
@@ -115,6 +124,15 @@
       var li = el('li');
       li.appendChild(quem(x, 'leu às ' + x.chegada));
       li.appendChild(badge('warn', x.flags.join(' · ')));
+      var bt = el('span', 'btns');
+      marcas(x, bt);
+      if (x.local_estado === 'invalido' || x.local_estado === 'recusado') {
+        bt.appendChild(botao('Validar local', 'ok', function () { return chamar(base + '/local', { aluno_id: x.id, valor: 1 }); }, false));
+        bt.appendChild(botao('Recusar local', 'bad', function () { return chamar(base + '/local', { aluno_id: x.id, valor: 0 }); }, x.local_estado === 'recusado'));
+      } else if (x.local_estado === 'validado') {
+        bt.appendChild(botao('Desfazer', 'sec', function () { return chamar(base + '/local', { aluno_id: x.id, valor: null }); }, false));
+      }
+      li.appendChild(bt);
       ul.appendChild(li);
     });
 

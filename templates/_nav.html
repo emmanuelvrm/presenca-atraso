@@ -9,6 +9,7 @@
   <a href="{{ url_for('prof_disciplinas') }}" class="{{ 'on' if ep in ('prof_disciplinas', 'prof_disciplina') }}"><span aria-hidden="true">📚</span> Disciplinas</a>
   <a href="{{ url_for('prof_turmas') }}" class="{{ 'on' if ep in ('prof_turmas', 'prof_turma') }}"><span aria-hidden="true">👥</span> Turmas</a>
   <a href="{{ url_for('prof_importar') }}" class="{{ 'on' if ep in ('prof_importar', 'prof_importar_grade') }}"><span aria-hidden="true">📥</span> Importar</a>
+  <a href="{{ url_for('prof_unidade') }}" class="{{ 'on' if ep == 'prof_unidade' }}"><span aria-hidden="true">🏫</span> Unidade</a>
   <a href="{{ url_for('prof_qr') }}" class="{{ 'on' if ep == 'prof_qr' }}"><span aria-hidden="true">🔳</span> QR code</a>
   <span class="sp"></span>
   <a href="{{ url_for('prof_sair') }}"><span aria-hidden="true">🚪</span> Sair</a>

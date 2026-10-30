@@ -146,3 +146,20 @@ button.chip[aria-pressed="true"] { outline: 3px solid var(--brand); outline-offs
 .pend { color: var(--bad); font-weight: 600; font-size: .85rem; }
 
 .lista li[hidden] { display: none; }
+
+/* período: dias da semana e destaque do pedágio */
+fieldset.dias { border: 1px solid var(--line); border-radius: 10px; margin: 8px 0 12px; padding: 8px 12px; }
+fieldset.dias legend { font-weight: 600; padding: 0 6px; }
+fieldset.dias { display: flex; flex-wrap: wrap; gap: 8px; }
+.flag { display: inline-block; margin: 0; }
+.flag input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.flag span { display: inline-block; min-width: 56px; text-align: center; padding: 10px 12px; border: 2px solid #b9c2d0; border-radius: 99px;
+  font-weight: 700; cursor: pointer; background: #fff; user-select: none; }
+.flag input:checked + span { background: var(--brand); border-color: var(--brand); color: #fff; }
+.flag input:focus-visible + span { outline: 3px solid #93b4ff; outline-offset: 1px; }
+.pedagio { margin: 14px 0 0; padding: 14px; border-radius: 12px; background: #b45309; color: #fff; font-size: 1.5rem;
+  font-weight: 800; line-height: 1.2; text-align: center; border: 3px solid #78350f; }
+.pedagio[hidden] { display: none; }
+.pedagio small { display: block; font-size: .85rem; font-weight: 600; margin-top: 4px; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0 0; }
+.checks[hidden] { display: none; }

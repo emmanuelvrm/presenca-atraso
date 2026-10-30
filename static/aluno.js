@@ -50,6 +50,18 @@
     $('res-disc').textContent = aula.disciplina ? aula.disciplina + (aula.curso ? ' · ' + aula.curso.posicao : '') : '';
     $('res-assunto').textContent = aula.assunto ? 'Assunto de hoje: ' + aula.assunto : '';
     $('res-curso').textContent = aula.curso ? aula.curso.texto : '';
+    var ped = aula.status === 'atrasado' || aula.status === 'bloqueado';
+    $('res-pedagio').hidden = !ped;
+    var ck = $('res-checks');
+    ck.hidden = !('wifi' in aula);
+    if (!ck.hidden) {
+      var l = $('ck-local'), w = $('ck-wifi');
+      var okLocal = aula.local === 'valido' || aula.local === 'validado';
+      l.className = 'badge ' + (okLocal ? 'ok' : 'warn');
+      l.textContent = okLocal ? '📍 Local confirmado' : '📍 Local não confirmado (o professor vai avaliar)';
+      w.className = 'badge ' + (aula.wifi ? 'ok' : 'gray');
+      w.textContent = aula.wifi ? '📶 Wi-Fi da escola confirmado' : '📶 Fora do Wi-Fi Grau Alunos';
+    }
     mostrar('v-res');
   }
 

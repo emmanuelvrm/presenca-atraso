@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ d.nome }}{% endblock %}
 {% block nav %}{% include "_nav.html" %}{% endblock %}
+{% from "_periodo.html" import periodo with context %}
 {% block content %}
 <p><a href="{{ url_for('prof_disciplinas') }}">← Disciplinas</a></p>
 <h1>{{ d.turma }} · {{ d.nome }}</h1>
@@ -10,13 +11,8 @@
   <h2>Período</h2>
   <form method="post" action="{{ url_for('prof_disciplina_editar', did=d.id) }}">
     <label>Disciplina <input name="nome" value="{{ d.nome }}" required maxlength="120"></label>
-    <div class="row">
-      <label>Data de início <input name="ini" value="{{ ini }}" required placeholder="dd/mm/aaaa"></label>
-      <label>Data de fim (prova) <input name="fim" value="{{ fim }}" required placeholder="dd/mm/aaaa"></label>
-      <label>Dias da semana <input name="dias" value="{{ d.dias }}" required></label>
-      <label>Hora de início <input name="hora" type="time" value="{{ d.hora_inicio or '' }}"></label>
-      <label>Nº de encontros (planilha) <input name="enc" type="number" min="1" max="200" value="{{ d.encontros or '' }}"></label>
-    </div>
+    <div class="row"><label>Hora de início <input name="hora" type="time" value="{{ d.hora_inicio or '' }}"></label></div>
+    {{ periodo(ini, fim, d.encontros, dias_sel) }}
     <p class="muted">Mudando datas ou dias, as aulas agendadas fora do período saem e as que faltam são criadas (aulas já abertas nunca são apagadas).</p>
     <button class="btn" type="submit">Salvar período</button>
   </form>
@@ -76,3 +72,4 @@
   </form>
 </section>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='periodo.js') }}"></script>{% endblock %}

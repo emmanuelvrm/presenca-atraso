@@ -58,3 +58,14 @@ Defina `DATABASE_URL` (Postgres) e os dados deixam de se perder nos reinícios. 
 | `DATA_DIR` | onde fica o SQLite |
 
 Guarda apenas matrícula, nome, horário (e coordenadas, se a localização estiver ativa). Avise os alunos (LGPD).
+
+## Calendário, dias da semana e data fim automática
+Nos formulários de disciplina a data é escolhida no calendário, os dias da semana são botões (flags) e a data de fim é calculada
+pelos encontros (pulando feriados). Se mexer na data de fim manualmente, ela deixa de ser recalculada até alterar início, encontros ou dias.
+
+## Checagens de presença (menu Unidade)
+- **Local (GPS):** leitura dentro do raio da escola = *válida*; fora ou sem GPS = *inválida*, e o professor escolhe **Validar** ou **Recusar** em "Atenção".
+  A posição padrão é aproximada (Av. Padre Pedro Pinto, 1500); em **Unidade → Usar minha localização atual** o professor fixa a posição exata, dentro da escola.
+- **Wi-Fi Grau Alunos:** o navegador não lê o nome do Wi-Fi, então o app grava o **IP público** de cada leitura e compara com os IPs registrados
+  em Unidade (ou na variável `ESCOLA_IPS`). Coincidindo, aparece 📶. Dados móveis não recebem o selo.
+- Aluno atrasado vê o aviso **PASSE NO PEDÁGIO** em destaque.

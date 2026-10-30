@@ -1,0 +1,16 @@
+{# campos de período: calendário, dias da semana (flags) e data fim automática. Uso: {% from "_periodo.html" import periodo %} #}
+{% macro periodo(ini="", fim="", enc="", dias_sel=[], rotulo_ini="Data de início", rotulo_fim="Data de fim (prova)") %}
+<div data-periodo data-feriados='{{ feriados|tojson }}'>
+  <div class="row">
+    <label>{{ rotulo_ini }} <input name="ini" type="date" value="{{ ini }}" required></label>
+    <label>Nº de encontros <input name="enc" type="number" min="1" max="200" value="{{ enc or '' }}"></label>
+    <label>{{ rotulo_fim }} <input name="fim" type="date" value="{{ fim }}"><small class="muted" data-fim-aviso>preenchida sozinha</small></label>
+  </div>
+  <fieldset class="dias">
+    <legend>Dias da semana</legend>
+    {% for v, n in [('seg','Seg'),('ter','Ter'),('qua','Qua'),('qui','Qui'),('sex','Sex'),('sab','Sáb')] %}
+    <label class="flag"><input type="checkbox" name="dias" value="{{ v }}" {% if loop.index0 in dias_sel %}checked{% endif %}><span>{{ n }}</span></label>
+    {% endfor %}
+  </fieldset>
+</div>
+{% endmacro %}
