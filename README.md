@@ -23,6 +23,22 @@ Docker (na VM Oracle): `docker build -t presenca . && docker run -d -p 8000:8000
    a caixa vermelha lista quem NÃO assina (não leu, atrasado sem autorização, acima do corte). Ninguém é riscado na ata.
 6. **Encerrar aula** gera o relatório para o pedagógico (imprimir/PDF, CSV, texto ou e-mail).
 
+## Cadastro obrigatório antes da aula
+
+Só abre a aula quem já tem: **turma → alunos → disciplina (início/fim) → aula com data e assunto**.
+- `Turmas`: escolha a turma na lista (vinda da planilha `catalogo.json`), digite outra, ou adicione várias (uma por linha).
+  A lista de alunos aceita `INF250005-Nome`, `INF240118Nome` e `INF240136 Nome`; o excedente (traços, números, símbolos) é limpo.
+- `Disciplinas`: início, fim, dias da semana e cronograma (`Aula 1: assunto`, uma por linha).
+- `Importar`: planilha de alocações, alunos, turmas e **grade em imagem/PDF** (PDF com texto lê direto; imagem usa EasyOCR).
+- Menu lateral retrátil; na tela da aula, os cards (na turma / no horário / atrasados / ainda não entraram) filtram a lista.
+
+### OCR (EasyOCR) opcional
+É pesado (PyTorch). Para ativar no servidor: `docker build --build-arg OCR=1 .` (precisa de ~2 GB de disco e 1–2 GB de RAM; não cabe no plano gratuito do Render).
+No seu computador: `pip install -r requirements-ocr.txt && python grade_ocr.py grade.png INF12T` e cole o resultado em Importar → Disciplinas.
+
+### Banco persistente
+Defina `DATABASE_URL` (Postgres) e os dados deixam de se perder nos reinícios. O catálogo (`catalogo.json`) é lido do arquivo e pode ser atualizado a partir da planilha.
+
 ## Antifraude
 
 - Matrícula presa a um aparelho; um aparelho só serve a um aluno. Troca de celular: `Turmas → Liberar aparelho`.

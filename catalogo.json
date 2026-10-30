@@ -1,0 +1,611 @@
+{
+ "fonte": "Planilha Turmas (abas Turmas e Disciplinas)",
+ "atualizado": "2026-10-29",
+ "turmas": [
+  {
+   "nome": "DSI01N",
+   "curso": "DSI",
+   "turno": "Noite",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "DSI02T",
+   "curso": "DSI",
+   "turno": "Tarde",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "DSI04T",
+   "curso": "DSI",
+   "turno": "Tarde",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF01N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF02M",
+   "curso": "INF",
+   "turno": "Manhã",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF03N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF04M",
+   "curso": "INF",
+   "turno": "Manhã",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF05N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF07N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF08M",
+   "curso": "INF",
+   "turno": "Manhã",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF09N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": "2D"
+  },
+  {
+   "nome": "INF10M",
+   "curso": "INF",
+   "turno": "Manhã",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF11N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": "Nova"
+  },
+  {
+   "nome": "INF12T",
+   "curso": "INF",
+   "turno": "Tarde",
+   "grade": "Antiga"
+  },
+  {
+   "nome": "INF13N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": "Nova"
+  },
+  {
+   "nome": "INF14M",
+   "curso": "INF",
+   "turno": "Manhã",
+   "grade": "Nova"
+  },
+  {
+   "nome": "INF16M",
+   "curso": "INF",
+   "turno": "Manhã",
+   "grade": "Nova"
+  },
+  {
+   "nome": "INF18T",
+   "curso": "INF",
+   "turno": "Tarde",
+   "grade": "Nova"
+  },
+  {
+   "nome": "INF98N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": ""
+  },
+  {
+   "nome": "INF99N",
+   "curso": "INF",
+   "turno": "Noite",
+   "grade": ""
+  }
+ ],
+ "disciplinas": [
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "Informática Educativa",
+   "encontros": 16,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "Inglês Instrumental",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "História do Computador",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "Lógica de Programação em TI",
+   "encontros": 16,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "Arquitetura de Computadores",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Arquitetura de Software Desktop",
+   "encontros": 10,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Rede de Computadores",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Análise de Requisitos",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Programação Orientada a Objetos",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Modelagem de Software",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Banco de Dados I",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Engenharia de Software e Projeto I",
+   "encontros": 9,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Manutenção de Computadores",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Estrutura de Dados",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Administração de Sistemas Operacionais I",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Segurança, Meio Ambiente e Saúde",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Linguagem de Programação para Desktop",
+   "encontros": 13,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Html, CSS e JavaScript",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Ética Profissional e Legislação",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Engenharia de Software e Projeto II",
+   "encontros": 9,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Administração de Sistemas Operacionais II",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Linguagem de Programação para Web",
+   "encontros": 13,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Gestão de TI",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Empreendedorismo",
+   "encontros": 13,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Suporte ao Usuário",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Fundamentos de Teste",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Gestão de Projetos e Projeto III",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "I",
+   "nome": "Lógica e Programação em DSI",
+   "encontros": 25,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "I",
+   "nome": "Análise de Requisitos",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "I",
+   "nome": "Modelagem de Software",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "II",
+   "nome": "Desenvolvimento Desktop",
+   "encontros": 16,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "II",
+   "nome": "Programação Orientada a Objetos",
+   "encontros": 8,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "II",
+   "nome": "Banco de Dados II",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "II",
+   "nome": "Html, CSS e JavaScript",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "III",
+   "nome": "Desenvolvimento Orientado a Objetos",
+   "encontros": 20,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "III",
+   "nome": "Engenharia de Software e Projeto I",
+   "encontros": 9,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "III",
+   "nome": "Engenharia de Software e Projeto II",
+   "encontros": 9,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "III",
+   "nome": "Programação Back-End",
+   "encontros": 33,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "IV",
+   "nome": "Programação Front-End",
+   "encontros": 20,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "IV",
+   "nome": "Banco de Dados Avançado",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "DSI",
+   "modulo": "IV",
+   "nome": "Gestão de Projetos de Software",
+   "encontros": 15,
+   "grade": "Antiga"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "Informática Educativa",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "Inglês Instrumental",
+   "encontros": 6,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "História do Computador",
+   "encontros": 4,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "Arquitetura de Computadores",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "I",
+   "nome": "Lógica de Programação",
+   "encontros": 12,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Rede de Computadores",
+   "encontros": 12,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Análise de Requisitos",
+   "encontros": 6,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Modelagem de Software",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Banco de Dados",
+   "encontros": 12,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Estrutura de Dados",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Programação Orientada a Objetos",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "II",
+   "nome": "Ética Profissional e Legislação",
+   "encontros": 4,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Manutenção de Computadores",
+   "encontros": 12,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Administração de Sistemas Operacionais I",
+   "encontros": 12,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Arquitetura de Software Desktop",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Linguagem de Programação para Desktop",
+   "encontros": 10,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Segurança, Meio Ambiente e Saúde",
+   "encontros": 4,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Html, CSS e Java Script",
+   "encontros": 10,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Introdução a Computação em Nuvem",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "III",
+   "nome": "Inteligência Artificial e Análise de Dados",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Administração de Sistemas Operacionais II",
+   "encontros": 12,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Suporte ao Usuário",
+   "encontros": 4,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Gestão de TI",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Linguagem de Programação para Web",
+   "encontros": 10,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Fundamentos de Testes",
+   "encontros": 8,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Empreendedorismo",
+   "encontros": 4,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Engenharia de Softwares e Gestão de Projetos",
+   "encontros": 12,
+   "grade": "Nova"
+  },
+  {
+   "curso": "INF",
+   "modulo": "IV",
+   "nome": "Projeto Integrador",
+   "encontros": 14,
+   "grade": "Nova"
+  }
+ ]
+}

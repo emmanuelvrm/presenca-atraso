@@ -10,6 +10,7 @@ Fluxo:
 """
 import csv
 import io
+import json
 import math
 import os
 import re
@@ -491,6 +492,101 @@ def info_curso(con, aula):
             "texto": texto, "posicao": "Aula %s de %d" % (aula["numero"], total)}
 
 
+# ------------------------------------------------------- catálogo, pré-requisitos
+def carregar_catalogo():
+    """Turmas e disciplinas da planilha 'Turmas' (arquivo catalogo.json, atualizável sem mexer no código)."""
+    try:
+        with open(os.path.join(BASE_DIR, "catalogo.json"), encoding="utf-8") as f:
+            c = json.load(f)
+    except (OSError, ValueError):
+        c = {}
+    return {"turmas": c.get("turmas", []), "disciplinas": c.get("disciplinas", [])}
+
+
+CATALOGO = carregar_catalogo()
+
+
+def pendencias_aula(con, aula):
+    """O que ainda falta cadastrar para a aula poder ser aberta (lista vazia = pronta)."""
+    falta = []
+    disc = con.execute("SELECT 1 FROM disciplinas WHERE id=?", (aula["disciplina_id"],)).fetchone() \
+        if aula["disciplina_id"] else None
+    if disc is None:
+        falta.append("disciplina")
+    if not aula["data_ref"]:
+        falta.append("data da aula")
+    if not (aula["assunto"] or "").strip():
+        falta.append("assunto da aula")
+    n = con.execute("SELECT COUNT(*) AS n FROM alunos WHERE turma_id=?", (aula["turma_id"],)).fetchone()["n"]
+    if n == 0:
+        falta.append("alunos da turma")
+    return falta
+
+
+def aulas_de_hoje(con):
+    linhas = con.execute(
+        "SELECT a.*, t.nome AS turma, d.hora_inicio AS hora FROM aulas a JOIN turmas t ON t.id=a.turma_id "
+        "LEFT JOIN disciplinas d ON d.id=a.disciplina_id WHERE a.data_ref=? AND a.status IN ('agendada','aberta') "
+        "ORDER BY t.nome", (hoje().isoformat(),)).fetchall()
+    return [dict(a, pend=pendencias_aula(con, a)) for a in linhas]
+
+
+CRON_AULA = re.compile(r"^\s*aula\s*(\d+)\s*[:\-–.)]*\s*(.*)$", re.I)
+CRON_NUM = re.compile(r"^\s*(\d+)\s*[:\-–.)]\s*(.*)$")
+
+
+def parse_cronograma(texto):
+    """'Aula 1: assunto' (ou '1) assunto', ou só o assunto, uma por linha) → [(numero, assunto)]."""
+    saida, proximo = [], 1
+    for linha in (texto or "").splitlines():
+        if not linha.strip():
+            continue
+        m = CRON_AULA.match(linha) or CRON_NUM.match(linha)
+        if m:
+            num, assunto = int(m.group(1)), m.group(2)
+        else:
+            num, assunto = proximo, linha
+        assunto = re.sub(r"\s+", " ", assunto).strip()[:300]
+        if assunto:
+            saida.append((num, assunto))
+        proximo = num + 1
+    return saida
+
+
+def aplicar_cronograma(con, disciplina_id, texto):
+    itens = parse_cronograma(texto)
+    total = con.execute("SELECT COUNT(*) AS n FROM aulas WHERE disciplina_id=?", (disciplina_id,)).fetchone()["n"]
+    ok, fora = 0, []
+    for num, assunto in itens:
+        if num < 1 or num > total:
+            fora.append(num)
+            continue
+        con.execute("UPDATE aulas SET assunto=? WHERE disciplina_id=? AND numero=?", (assunto, disciplina_id, num))
+        ok += 1
+    return ok, fora, total
+
+
+def sincronizar_datas(con, disc, dias, ini, fim):
+    """Depois de mudar período/dias: apaga aulas agendadas (sem leituras) fora do período e cria as que faltam."""
+    removidas = 0
+    for a in con.execute("SELECT * FROM aulas WHERE disciplina_id=?", (disc["id"],)).fetchall():
+        d = parse_data(a["data_ref"])
+        if a["status"] == "agendada" and (d is None or d < ini or d > fim) and \
+                not con.execute("SELECT 1 FROM leituras WHERE aula_id=?", (a["id"],)).fetchone():
+            con.execute("DELETE FROM aulas WHERE id=?", (a["id"],))
+            removidas += 1
+    existentes = {r["data_ref"] for r in con.execute("SELECT data_ref FROM aulas WHERE disciplina_id=?", (disc["id"],))}
+    novas = 0
+    for d in gerar_datas(dias, ini, fim):
+        if d.isoformat() not in existentes:
+            con.execute("INSERT INTO aulas(turma_id,disciplina,inicio,status,criada_em,disciplina_id,data_ref) "
+                        "VALUES (?,?,?,'agendada',?,?,?)",
+                        (disc["turma_id"], disc["nome"], epoch_do_dia(d, disc["hora_inicio"]), now(), disc["id"], d.isoformat()))
+            novas += 1
+    renumerar(con, disc["id"])
+    return novas, removidas
+
+
 # ------------------------------------------------------------- aluno (público)
 @app.get("/")
 def index():
@@ -633,58 +729,15 @@ def prof_sair():
 @login_required
 def prof_home():
     con = db()
-    turmas = con.execute(
-        "SELECT t.id, t.nome, (SELECT COUNT(*) FROM alunos a WHERE a.turma_id=t.id) AS n "
-        "FROM turmas t ORDER BY t.nome").fetchall()
     base = ("SELECT a.*, t.nome AS turma, "
             "(SELECT COUNT(*) FROM leituras l WHERE l.aula_id=a.id) AS leram "
             "FROM aulas a JOIN turmas t ON t.id=a.turma_id ")
     abertas = con.execute(base + "WHERE a.status='aberta' ORDER BY a.inicio DESC").fetchall()
     recentes = con.execute(base + "WHERE a.status='encerrada' ORDER BY a.inicio DESC LIMIT 15").fetchall()
-    ultima = con.execute("SELECT disciplina FROM aulas ORDER BY id DESC LIMIT 1").fetchone()
-    return render_template("prof_home.html", turmas=turmas, abertas=abertas, recentes=recentes,
-                           hm=hm, dmy=dmy, agora=hm(now()), tol=TOLERANCIA_PADRAO,
-                           corte=CORTE_PADRAO, ultima_disciplina=(ultima["disciplina"] if ultima else ""))
-
-
-@app.post("/prof/aulas")
-@login_required
-def prof_criar_aula():
-    con = db()
-    f = request.form
-    try:
-        turma_id = int(f.get("turma_id") or 0)
-        tol = max(0, min(600, int(f.get("tolerancia") or TOLERANCIA_PADRAO)))
-        corte = max(1, min(600, int(f.get("corte") or CORTE_PADRAO)))
-    except ValueError:
-        abort(400)
-    turma = con.execute("SELECT id FROM turmas WHERE id=?", (turma_id,)).fetchone()
-    if turma is None:
-        flash("Escolha uma turma.", "erro")
-        return redirect(url_for("prof_home"))
-    inicio = parse_hm(f.get("inicio")) or now()
-    t = now()
-    disciplina = (f.get("disciplina") or "").strip()[:120]
-    con.execute("UPDATE aulas SET status='encerrada', encerrada_em=? WHERE turma_id=? AND status='aberta'",
-                (t, turma_id))
-    # se existe a aula do dia na agenda da turma, é ela que vale
-    do_dia = None
-    for cand in con.execute("SELECT * FROM aulas WHERE turma_id=? AND status='agendada' AND data_ref=? ORDER BY id",
-                            (turma_id, hoje().isoformat())):
-        if not disciplina or chave(cand["disciplina"]) == chave(disciplina):
-            do_dia = cand
-            break
-    if do_dia is not None:
-        con.execute("UPDATE aulas SET status='aberta', inicio=?, tolerancia_min=?, corte_min=?, criada_em=?, "
-                    "encerrada_em=NULL WHERE id=?", (inicio, tol, corte, t, do_dia["id"]))
-        aula_id = do_dia["id"]
-    else:
-        cur = con.execute(
-            "INSERT INTO aulas(turma_id,disciplina,inicio,tolerancia_min,corte_min,criada_em,data_ref) "
-            "VALUES (?,?,?,?,?,?,?)", (turma_id, disciplina, inicio, tol, corte, t, hoje().isoformat()))
-        aula_id = cur.lastrowid
-    con.commit()
-    return redirect(url_for("prof_aula", aula_id=aula_id))
+    cont = {k: con.execute("SELECT COUNT(*) AS n FROM %s" % k).fetchone()["n"]
+            for k in ("turmas", "alunos", "disciplinas", "aulas")}
+    return render_template("prof_home.html", abertas=abertas, recentes=recentes, de_hoje=aulas_de_hoje(con),
+                           hm=hm, dmy=dmy, tol=TOLERANCIA_PADRAO, corte=CORTE_PADRAO, cont=cont)
 
 
 def get_aula(aula_id):
@@ -859,6 +912,16 @@ def prof_reabrir(aula_id):
 # ----------------------------------------------------------- professor: turmas
 LINHA_MAT_NOME = re.compile(r"^\s*([A-Za-z]*\d[\w-]*)\s*[;,\t ]\s*(.+?)\s*$")
 LINHA_NOME_MAT = re.compile(r"^\s*(.+?)\s*[;,\t]\s*([A-Za-z]*\d[\w-]*)\s*$")
+# matrícula colada ou separada do nome por qualquer coisa: INF250005-Nome, INF240118Nome, INF240136 Nome
+LINHA_MAT_COLADA = re.compile(r"^[^\w]*([A-Za-z]{0,6}\d{4,})(?!\d)[\s\-–—:;,.|/)\]]*(.*)$")
+NUMERACAO = re.compile(r"^\s*\d{1,3}\s*[.)]\s+")
+
+
+def limpar_nome(s):
+    """Tira dígitos, símbolos e espaços sobrando; mantém letras (com acento), ', - e ."""
+    s = re.sub(r"[^A-Za-zÀ-ÿ'’.\-\s]", " ", s or "")
+    s = re.sub(r"\s+", " ", s).strip(" .-'’")
+    return norm_nome(s) if len(re.findall(r"[A-Za-zÀ-ÿ]", s)) >= 2 else ""
 
 
 def parse_roster(texto):
@@ -866,13 +929,18 @@ def parse_roster(texto):
     for linha in (texto or "").splitlines():
         if not linha.strip():
             continue
+        linha = NUMERACAO.sub("", linha)
+        m = LINHA_MAT_COLADA.match(linha)
+        if m and limpar_nome(m.group(2)):
+            achados.append((norm_mat(m.group(1)), limpar_nome(m.group(2))))
+            continue
         m = LINHA_MAT_NOME.match(linha)
-        if m:
-            achados.append((norm_mat(m.group(1)), norm_nome(m.group(2))))
+        if m and limpar_nome(m.group(2)):
+            achados.append((norm_mat(m.group(1)), limpar_nome(m.group(2))))
             continue
         m = LINHA_NOME_MAT.match(linha)
-        if m:
-            achados.append((norm_mat(m.group(2)), norm_nome(m.group(1))))
+        if m and limpar_nome(m.group(1)):
+            achados.append((norm_mat(m.group(2)), limpar_nome(m.group(1))))
         else:
             ignoradas += 1
     return achados, ignoradas
@@ -895,25 +963,60 @@ def importar_roster(turma_id, texto):
     return novos, atualizados, ignoradas
 
 
+def catalogo_turma(nome):
+    n = norm_turma(nome)
+    return next((t for t in CATALOGO["turmas"] if t["nome"].upper() == n), None)
+
+
+def criar_turma(con, nome, turno=None):
+    nome = norm_turma(nome)
+    cat = catalogo_turma(nome)
+    return obter_turma(con, nome, turno or (cat["turno"] if cat else None))
+
+
 @app.route("/prof/turmas", methods=["GET", "POST"])
 @login_required
 def prof_turmas():
     con = db()
     if request.method == "POST":
-        nome = norm_turma(request.form.get("nome"))
+        nome = norm_turma(request.form.get("nome") or request.form.get("catalogo"))
         if not nome:
-            flash("Informe o nome da turma.", "erro")
+            flash("Escolha uma turma da lista ou digite o nome.", "erro")
             return redirect(url_for("prof_turmas"))
-        con.execute("INSERT INTO turmas(nome) VALUES (?) ON CONFLICT DO NOTHING", (nome,))
+        turma = criar_turma(con, nome)
         con.commit()
-        turma = con.execute("SELECT id FROM turmas WHERE nome=?", (nome,)).fetchone()
         n, u, i = importar_roster(turma["id"], request.form.get("lista"))
         flash("Turma %s: %d aluno(s) novo(s), %d atualizado(s), %d linha(s) ignorada(s)." % (nome, n, u, i), "ok")
         return redirect(url_for("prof_turma", tid=turma["id"]))
     turmas = con.execute(
-        "SELECT t.id, t.nome, COUNT(a.id) AS n, COUNT(a.device_key) AS vinc "
+        "SELECT t.id, t.nome, t.turno, COUNT(a.id) AS n, COUNT(a.device_key) AS vinc "
         "FROM turmas t LEFT JOIN alunos a ON a.turma_id=t.id GROUP BY t.id ORDER BY t.nome").fetchall()
-    return render_template("turmas.html", turmas=turmas)
+    existentes = {t["nome"] for t in turmas}
+    return render_template("turmas.html", turmas=turmas, catalogo=CATALOGO["turmas"], existentes=existentes)
+
+
+@app.post("/prof/turmas/massa")
+@login_required
+def prof_turmas_massa():
+    """Uma turma por linha (opcionalmente 'turma;turno'), ou todas as do catálogo."""
+    con = db()
+    linhas = []
+    if request.form.get("todas_catalogo"):
+        linhas = [t["nome"] for t in CATALOGO["turmas"]]
+    else:
+        linhas = [l for l in (request.form.get("nomes") or "").splitlines() if l.strip()]
+    novas = ja = 0
+    for linha in linhas:
+        partes = [p.strip() for p in re.split(r"[;\t,]", linha)]
+        nome = norm_turma(partes[0])
+        if not nome:
+            continue
+        existia = con.execute("SELECT 1 FROM turmas WHERE nome=?", (nome,)).fetchone() is not None
+        criar_turma(con, nome, partes[1] if len(partes) > 1 and partes[1] else None)
+        ja, novas = (ja + 1, novas) if existia else (ja, novas + 1)
+    con.commit()
+    flash("%d turma(s) criada(s), %d já existia(m)." % (novas, ja), "ok" if novas or ja else "erro")
+    return redirect(url_for("prof_turmas"))
 
 
 @app.route("/prof/turmas/<int:tid>", methods=["GET", "POST"])
@@ -1157,16 +1260,14 @@ def prof_agenda():
                 "FROM aulas a WHERE a.disciplina_id=? ORDER BY a.data_ref, a.id", (d["id"],)):
             dt = parse_data(a["data_ref"])
             aulas.append(dict(a, dia=("%s %s" % (NOMES_DIA[dt.weekday()], dt.strftime("%d/%m"))) if dt else "",
-                              hoje=(a["data_ref"] == hj.isoformat())))
+                              hoje=(a["data_ref"] == hj.isoformat()),
+                              pend=pendencias_aula(con, a) if a["status"] == "agendada" else []))
         fim, ini = parse_data(d["data_fim"]), parse_data(d["data_ini"])
         discs.append({"d": d, "aulas": aulas,
                       "periodo": "%s a %s" % (ini.strftime("%d/%m/%Y") if ini else "?",
                                               fim.strftime("%d/%m/%Y") if fim else "?"),
                       "em_curso": bool(ini and fim and ini <= hj <= fim)})
-    de_hoje = con.execute(
-        "SELECT a.*, t.nome AS turma, d.hora_inicio AS hora FROM aulas a JOIN turmas t ON t.id=a.turma_id "
-        "LEFT JOIN disciplinas d ON d.id=a.disciplina_id WHERE a.data_ref=? AND a.status IN ('agendada','aberta') "
-        "ORDER BY t.nome", (hj.isoformat(),)).fetchall()
+    de_hoje = aulas_de_hoje(con)
     return render_template("agenda.html", discs=discs, turmas=turmas, turma_id=turma_id, todas=todas,
                            de_hoje=de_hoje, hm=hm, hoje=hj.isoformat(),
                            caminho=request.full_path.rstrip("?"))
@@ -1185,6 +1286,12 @@ def prof_agenda_abrir(aula_id):
         corte = max(1, min(600, int(f.get("corte") or CORTE_PADRAO)))
     except ValueError:
         abort(400)
+    falta = pendencias_aula(con, aula)
+    if falta:
+        flash("Não dá para abrir: falta cadastrar " + ", ".join(falta) + ".", "erro")
+        if aula["disciplina_id"]:
+            return redirect(url_for("prof_disciplina", did=aula["disciplina_id"]))
+        return redirect(seguro_next(request.form.get("next")) if request.form.get("next") else url_for("prof_agenda"))
     t = now()
     inicio = parse_hm(f.get("inicio")) or t
     con.execute("UPDATE aulas SET status='encerrada', encerrada_em=? WHERE turma_id=? AND status='aberta' AND id<>?",
@@ -1260,12 +1367,201 @@ def prof_agenda_remover(aula_id):
     return redirect(seguro_next(request.form.get("next")))
 
 
+# ------------------------------------------------------- professor: disciplinas
+def _disciplina_ou_404(con, did):
+    d = con.execute("SELECT d.*, t.nome AS turma FROM disciplinas d JOIN turmas t ON t.id=d.turma_id "
+                    "WHERE d.id=?", (did,)).fetchone()
+    if d is None:
+        abort(404)
+    return d
+
+
+@app.get("/prof/disciplinas")
+@login_required
+def prof_disciplinas():
+    con = db()
+    lista = []
+    for d in con.execute("SELECT d.*, t.nome AS turma, t.turno AS turno FROM disciplinas d "
+                         "JOIN turmas t ON t.id=d.turma_id ORDER BY t.nome, d.data_ini, d.nome").fetchall():
+        r = con.execute("SELECT COUNT(*) AS n, SUM(CASE WHEN COALESCE(assunto,'')<>'' THEN 1 ELSE 0 END) AS com "
+                        "FROM aulas WHERE disciplina_id=?", (d["id"],)).fetchone()
+        ini, fim = parse_data(d["data_ini"]), parse_data(d["data_fim"])
+        lista.append({"d": d, "n": r["n"], "com": r["com"] or 0,
+                      "periodo": "%s a %s" % (ini.strftime("%d/%m/%Y") if ini else "?", fim.strftime("%d/%m/%Y") if fim else "?")})
+    turmas = con.execute("SELECT id, nome, turno FROM turmas ORDER BY nome").fetchall()
+    nomes = sorted({x["nome"] for x in CATALOGO["disciplinas"]})
+    return render_template("disciplinas.html", lista=lista, turmas=turmas, nomes=nomes,
+                           catalogo_disc=CATALOGO["disciplinas"], catalogo_turmas=CATALOGO["turmas"])
+
+
+@app.post("/prof/disciplinas")
+@login_required
+def prof_disciplina_criar():
+    con = db()
+    f = request.form
+    turma_id = f.get("turma_id", type=int)
+    turma = con.execute("SELECT * FROM turmas WHERE id=?", (turma_id,)).fetchone() if turma_id else None
+    if turma is None:
+        flash("Cadastre a turma antes e escolha-a na lista.", "erro")
+        return redirect(url_for("prof_disciplinas"))
+    ok, msg = salvar_disciplina(con, turma["nome"], turma["turno"], f.get("dias"), f.get("ini"), f.get("fim"),
+                                f.get("nome"), f.get("enc"), f.get("hora"))
+    if not ok:
+        flash("Não foi possível: " + msg, "erro")
+        return redirect(url_for("prof_disciplinas"))
+    disc = con.execute("SELECT id FROM disciplinas WHERE turma_id=? AND nome=? AND data_ini=?",
+                       (turma["id"], norm_nome(f.get("nome")), parse_data(f.get("ini")).isoformat())).fetchone()
+    flash(msg, "ok")
+    if (f.get("cronograma") or "").strip():
+        n, fora, total = aplicar_cronograma(con, disc["id"], f.get("cronograma"))
+        flash("Cronograma: %d assunto(s) aplicado(s)." % n + (" Ignorada(s) aula(s) %s (a disciplina tem %d)." % (
+            ", ".join(map(str, fora)), total) if fora else ""), "ok")
+    con.commit()
+    return redirect(url_for("prof_disciplina", did=disc["id"]))
+
+
+@app.get("/prof/disciplinas/<int:did>")
+@login_required
+def prof_disciplina(did):
+    con = db()
+    d = _disciplina_ou_404(con, did)
+    aulas = []
+    for a in con.execute("SELECT a.*, (SELECT COUNT(*) FROM leituras l WHERE l.aula_id=a.id) AS leram "
+                         "FROM aulas a WHERE a.disciplina_id=? ORDER BY a.data_ref, a.id", (did,)):
+        dt = parse_data(a["data_ref"])
+        aulas.append(dict(a, dia=("%s %s" % (NOMES_DIA[dt.weekday()], dt.strftime("%d/%m/%Y"))) if dt else "",
+                          pend=pendencias_aula(con, a) if a["status"] == "agendada" else []))
+    cron = "\n".join("Aula %s: %s" % (a["numero"], a["assunto"]) for a in aulas if a["assunto"])
+    ini, fim = parse_data(d["data_ini"]), parse_data(d["data_fim"])
+    n_alunos = con.execute("SELECT COUNT(*) AS n FROM alunos WHERE turma_id=?", (d["turma_id"],)).fetchone()["n"]
+    return render_template("disciplina.html", d=d, aulas=aulas, cron=cron, n_alunos=n_alunos,
+                           ini=ini.strftime("%d/%m/%Y") if ini else "", fim=fim.strftime("%d/%m/%Y") if fim else "",
+                           caminho=url_for("prof_disciplina", did=did))
+
+
+@app.post("/prof/disciplinas/<int:did>/editar")
+@login_required
+def prof_disciplina_editar(did):
+    con = db()
+    d = _disciplina_ou_404(con, did)
+    f = request.form
+    dias = parse_dias(f.get("dias"))
+    ini = parse_data(f.get("ini"))
+    fim = parse_data(f.get("fim"), padrao_ano=ini.year if ini else None, depois_de=ini)
+    nome = norm_nome(f.get("nome")) or d["nome"]
+    hora = (f.get("hora") or "").strip() or d["hora_inicio"]
+    if not dias or ini is None or fim is None or fim < ini:
+        flash("Confira os dias da semana e as datas de início e fim.", "erro")
+        return redirect(url_for("prof_disciplina", did=did))
+    outra = con.execute("SELECT 1 FROM disciplinas WHERE turma_id=? AND nome=? AND data_ini=? AND id<>?",
+                        (d["turma_id"], nome, ini.isoformat(), did)).fetchone()
+    if outra:
+        flash("Já existe uma disciplina com esse nome e data de início nesta turma.", "erro")
+        return redirect(url_for("prof_disciplina", did=did))
+    enc = f.get("enc", type=int)
+    con.execute("UPDATE disciplinas SET nome=?, dias=?, data_ini=?, data_fim=?, hora_inicio=?, encontros=? WHERE id=?",
+                (nome, dias_txt(dias), ini.isoformat(), fim.isoformat(), hora, enc, did))
+    d2 = con.execute("SELECT * FROM disciplinas WHERE id=?", (did,)).fetchone()
+    mudou_periodo = (d["dias"], d["data_ini"], d["data_fim"]) != (d2["dias"], d2["data_ini"], d2["data_fim"])
+    novas = removidas = 0
+    if mudou_periodo:
+        novas, removidas = sincronizar_datas(con, d2, dias, ini, fim)
+    con.execute("UPDATE aulas SET disciplina=? WHERE disciplina_id=?", (nome, did))
+    for a in con.execute("SELECT id, data_ref FROM aulas WHERE disciplina_id=? AND status='agendada'", (did,)).fetchall():
+        dt = parse_data(a["data_ref"])
+        if dt:
+            con.execute("UPDATE aulas SET inicio=? WHERE id=?", (epoch_do_dia(dt, hora), a["id"]))
+    con.commit()
+    flash("Disciplina atualizada." + (" %d aula(s) criada(s), %d removida(s)." % (novas, removidas) if mudou_periodo else ""), "ok")
+    return redirect(url_for("prof_disciplina", did=did))
+
+
+@app.post("/prof/disciplinas/<int:did>/cronograma")
+@login_required
+def prof_disciplina_cronograma(did):
+    """Salva os assuntos: campos 'assunto-<id da aula>' e/ou o texto 'Aula N: assunto'."""
+    con = db()
+    _disciplina_ou_404(con, did)
+    f = request.form
+    n_campos = 0
+    for a in con.execute("SELECT id FROM aulas WHERE disciplina_id=?", (did,)).fetchall():
+        chave_campo = "assunto-%d" % a["id"]
+        if chave_campo in f:
+            con.execute("UPDATE aulas SET assunto=? WHERE id=?", (f.get(chave_campo, "").strip()[:300], a["id"]))
+            n_campos += 1
+    msg = []
+    if n_campos:
+        msg.append("%d assunto(s) salvo(s)" % n_campos)
+    if (f.get("cronograma") or "").strip():
+        n, fora, total = aplicar_cronograma(con, did, f.get("cronograma"))
+        msg.append("%d assunto(s) aplicado(s) do texto" % n)
+        if fora:
+            msg.append("ignorada(s) aula(s) %s — a disciplina tem %d aula(s)" % (", ".join(map(str, fora)), total))
+    con.commit()
+    flash("; ".join(msg).capitalize() + "." if msg else "Nada para salvar.", "ok")
+    return redirect(url_for("prof_disciplina", did=did))
+
+
+@app.post("/prof/disciplinas/<int:did>/excluir")
+@login_required
+def prof_disciplina_excluir(did):
+    con = db()
+    _disciplina_ou_404(con, did)
+    usadas = con.execute("SELECT COUNT(*) AS n FROM aulas a WHERE a.disciplina_id=? AND "
+                         "(a.status<>'agendada' OR EXISTS (SELECT 1 FROM leituras l WHERE l.aula_id=a.id))",
+                         (did,)).fetchone()["n"]
+    if usadas:
+        flash("Não dá para excluir: %d aula(s) já foram abertas e têm registros." % usadas, "erro")
+        return redirect(url_for("prof_disciplina", did=did))
+    con.execute("DELETE FROM aulas WHERE disciplina_id=?", (did,))
+    con.execute("DELETE FROM disciplinas WHERE id=?", (did,))
+    con.commit()
+    flash("Disciplina excluída.", "ok")
+    return redirect(url_for("prof_disciplinas"))
+
+
+def _ocr_instalado():
+    try:
+        import importlib.util
+        return importlib.util.find_spec("easyocr") is not None
+    except Exception:
+        return False
+
+
+@app.post("/prof/importar/grade")
+@login_required
+def prof_importar_grade():
+    """Envia imagem/PDF da grade → texto (EasyOCR ou texto do PDF) → linhas editáveis para importar."""
+    import grade_ocr
+    arq = request.files.get("arquivo")
+    if not arq or not arq.filename:
+        flash("Escolha uma imagem (PNG/JPG) ou PDF da grade.", "erro")
+        return redirect(url_for("prof_importar"))
+    turma = norm_turma(request.form.get("turma"))
+    turno = ""
+    cat = catalogo_turma(turma)
+    if cat:
+        turno = cat["turno"]
+    try:
+        texto, metodo = grade_ocr.extrair_texto(arq.read(12 * 1024 * 1024), arq.filename)
+    except grade_ocr.OCRIndisponivel as e:
+        flash(str(e), "erro")
+        return redirect(url_for("prof_importar"))
+    except Exception as e:  # imagem corrompida, memória etc.
+        flash("Não consegui ler o arquivo (%s)." % e.__class__.__name__, "erro")
+        return redirect(url_for("prof_importar"))
+    linhas = grade_ocr.interpretar(texto, turma, turno)
+    return render_template("importar_grade.html", texto=texto, linhas=linhas, metodo=metodo, turma=turma,
+                           n=len([l for l in linhas.splitlines() if l.strip()]))
+
+
 # ------------------------------------------------------------ professor: importar
 @app.get("/prof/importar")
 @login_required
 def prof_importar():
     turmas = db().execute("SELECT id, nome FROM turmas ORDER BY nome").fetchall()
-    return render_template("importar.html", turmas=turmas)
+    return render_template("importar.html", turmas=turmas, catalogo=CATALOGO["turmas"],
+                           ocr_ok=_ocr_instalado())
 
 
 @app.post("/prof/importar/<tipo>")
@@ -1277,7 +1573,7 @@ def prof_importar_acao(tipo):
         for linha in ler_texto_enviado().splitlines():
             partes = [p.strip() for p in re.split(r"[;\t]", linha)]
             if partes and partes[0]:
-                obter_turma(con, partes[0], partes[1] if len(partes) > 1 else None)
+                criar_turma(con, partes[0], partes[1] if len(partes) > 1 and partes[1] else None)
                 n += 1
         con.commit()
         flash("%d turma(s) processada(s)." % n, "ok")

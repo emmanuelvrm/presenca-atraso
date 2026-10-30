@@ -14,6 +14,7 @@
     incluir disciplinas já encerradas
   </label>
   <a class="btn sec sm" href="{{ url_for('prof_importar') }}">Importar disciplinas</a>
+  <a class="btn sec sm" href="{{ url_for('prof_disciplinas') }}">Editar disciplinas</a>
 </form>
 
 {% if de_hoje %}
@@ -23,9 +24,12 @@
   {% for a in de_hoje %}
     <li>
       <span class="who"><b>{{ a.turma }} · {{ a.disciplina }}</b>
-        <small>{% if a.numero %}aula {{ a.numero }} · {% endif %}{{ a.assunto or 'sem assunto' }}</small></span>
+        <small>{% if a.numero %}aula {{ a.numero }} · {% endif %}{{ a.assunto or 'sem assunto' }}</small>
+        {% if a.pend %}<small class="pend">falta cadastrar: {{ a.pend|join(', ') }}</small>{% endif %}</span>
       {% if a.status == 'aberta' %}
         <a class="btn sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Acompanhar (aberta)</a>
+      {% elif a.pend %}
+        <a class="btn sec sm" href="{{ url_for('prof_disciplina', did=a.disciplina_id) if a.disciplina_id else url_for('prof_disciplinas') }}">Completar cadastro</a>
       {% else %}
         <form method="post" action="{{ url_for('prof_agenda_abrir', aula_id=a.id) }}" class="btns">
           <input type="time" name="inicio" value="{{ a.hora or '19:00' }}" style="width:auto;margin:0" aria-label="Início da aula" required>
@@ -56,10 +60,13 @@
       </form>
       <span class="btns">
         {% if a.status == 'agendada' %}
+        {% if a.pend %}<span class="pend">falta: {{ a.pend|join(', ') }}</span>
+        {% else %}
         <form method="post" action="{{ url_for('prof_agenda_abrir', aula_id=a.id) }}" class="btns">
           <input type="time" name="inicio" value="{{ d.hora_inicio or '19:00' }}" style="width:auto;margin:0" aria-label="Início" required>
           <button class="btn sm" type="submit">Abrir</button>
         </form>
+        {% endif %}
         <form method="post" action="{{ url_for('prof_agenda_remover', aula_id=a.id) }}" onsubmit="return confirm('Remover esta aula da agenda?');">
           <input type="hidden" name="next" value="{{ caminho }}">
           <button class="btn sec sm" type="submit">Remover</button>

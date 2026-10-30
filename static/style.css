@@ -20,11 +20,6 @@ h3 { font-size: 1rem; margin: 18px 0 8px; }
 .foot { font-size: .85rem; margin-top: 18px; }
 .brand { text-align: center; font-size: 1.25rem; }
 
-.nav { background: #0f1a33; color: #fff; }
-.nav .in { max-width: 960px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
-.nav a { color: #dbe4ff; text-decoration: none; font-weight: 600; padding: 4px 2px; }
-.nav a:hover, .nav a.on { color: #fff; text-decoration: underline; }
-.nav .sp { flex: 1; }
 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
 .card[hidden] { display: none; }
@@ -97,7 +92,7 @@ th { background: #eef1f6; }
 code.url { background: #eef1f6; padding: 2px 8px; border-radius: 6px; word-break: break-all; }
 
 @media print {
-  .nav, .toolbar, .noprint { display: none !important; }
+  .toolbar, .noprint { display: none !important; }
   body { background: #fff; }
   .wrap { max-width: none; padding: 0; }
   .card { border: 0; padding: 0; }
@@ -115,3 +110,39 @@ body.aluno .wrap { max-width: 480px; }
 .res-aula { text-align: left; background: rgba(255,255,255,.65); border-radius: 10px; padding: 10px 14px; margin: 12px 0 0; color: var(--ink); }
 .res-aula[hidden] { display: none; }
 .res-aula b { display: block; }
+
+/* menu lateral retrátil */
+:root { --side-w: 220px; --top-h: 46px; }
+.topbar { position: fixed; top: 0; left: 0; right: 0; height: var(--top-h); background: #0f1a33; color: #fff;
+  display: flex; align-items: center; gap: 10px; padding: 0 10px; z-index: 30; }
+.topbar-t { color: #fff; text-decoration: none; font-weight: 700; }
+.side-btn { background: transparent; color: #fff; border: 1px solid #3a4a73; border-radius: 8px; font-size: 1.2rem;
+  width: 38px; height: 34px; cursor: pointer; }
+.side-btn:focus-visible { outline: 3px solid #93b4ff; }
+.side { position: fixed; top: var(--top-h); left: 0; bottom: 0; width: var(--side-w); background: #14213f; padding: 10px 8px;
+  display: flex; flex-direction: column; gap: 2px; overflow-y: auto; z-index: 25; transition: transform .2s ease; }
+.side a { color: #dbe4ff; text-decoration: none; font-weight: 600; padding: 10px 12px; border-radius: 9px; }
+.side a:hover { background: #1f3060; color: #fff; }
+.side a.on { background: #2b4cb8; color: #fff; }
+.side .sp { flex: 1; }
+.side-bd { display: none; }
+body.comnav main.wrap { margin: 0 0 0 var(--side-w); padding-top: calc(var(--top-h) + 16px); max-width: 1100px;
+  transition: margin-left .2s ease; }
+html.side-closed .side { transform: translateX(-100%); }
+html.side-closed body.comnav main.wrap { margin: 0 auto; }
+@media (max-width: 859px) {
+  body.comnav main.wrap, html.side-closed body.comnav main.wrap { margin: 0 auto; }
+  html:not(.side-closed) .side-bd { display: block; position: fixed; inset: var(--top-h) 0 0 0; background: rgba(10,16,32,.5); z-index: 20; }
+}
+@media (prefers-reduced-motion: reduce) { .side, body.comnav main.wrap { transition: none; } }
+@media print { .topbar, .side, .side-bd { display: none !important; } body.comnav main.wrap { margin: 0 auto; padding-top: 0; } }
+
+/* cards-filtro da aula */
+button.chip { text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%; }
+button.chip:hover { border-color: var(--brand); }
+button.chip[aria-pressed="true"] { outline: 3px solid var(--brand); outline-offset: 1px; background: #eef3ff; }
+.cols.f1 { grid-template-columns: 1fr; }
+.busca { max-width: 360px; margin: 0 0 12px; }
+.pend { color: var(--bad); font-weight: 600; font-size: .85rem; }
+
+.lista li[hidden] { display: none; }

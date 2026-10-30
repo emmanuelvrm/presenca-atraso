@@ -1,9 +1,33 @@
-<nav class="nav"><div class="in">
-  <a href="{{ url_for('prof_home') }}">Painel</a>
-  <a href="{{ url_for('prof_agenda') }}">Aulas</a>
-  <a href="{{ url_for('prof_turmas') }}">Turmas</a>
-  <a href="{{ url_for('prof_importar') }}">Importar</a>
-  <a href="{{ url_for('prof_qr') }}">QR code</a>
+{% set ep = request.endpoint or '' %}
+<header class="topbar noprint">
+  <button id="side-toggle" class="side-btn" type="button" aria-controls="side" aria-expanded="true" aria-label="Abrir ou fechar o menu">☰</button>
+  <a class="topbar-t" href="{{ url_for('prof_home') }}">Presença &amp; Atrasos</a>
+</header>
+<nav id="side" class="side noprint" aria-label="Menu principal">
+  <a href="{{ url_for('prof_home') }}" class="{{ 'on' if ep in ('prof_home', 'prof_aula', 'prof_relatorio') }}"><span aria-hidden="true">🏠</span> Painel</a>
+  <a href="{{ url_for('prof_agenda') }}" class="{{ 'on' if ep == 'prof_agenda' }}"><span aria-hidden="true">🗓️</span> Aulas</a>
+  <a href="{{ url_for('prof_disciplinas') }}" class="{{ 'on' if ep in ('prof_disciplinas', 'prof_disciplina') }}"><span aria-hidden="true">📚</span> Disciplinas</a>
+  <a href="{{ url_for('prof_turmas') }}" class="{{ 'on' if ep in ('prof_turmas', 'prof_turma') }}"><span aria-hidden="true">👥</span> Turmas</a>
+  <a href="{{ url_for('prof_importar') }}" class="{{ 'on' if ep in ('prof_importar', 'prof_importar_grade') }}"><span aria-hidden="true">📥</span> Importar</a>
+  <a href="{{ url_for('prof_qr') }}" class="{{ 'on' if ep == 'prof_qr' }}"><span aria-hidden="true">🔳</span> QR code</a>
   <span class="sp"></span>
-  <a href="{{ url_for('prof_sair') }}">Sair</a>
-</div></nav>
+  <a href="{{ url_for('prof_sair') }}"><span aria-hidden="true">🚪</span> Sair</a>
+</nav>
+<div id="side-bd" class="side-bd noprint"></div>
+<script>
+  (function () {
+    var h = document.documentElement, b = document.getElementById('side-toggle');
+    function atualizar() { b.setAttribute('aria-expanded', h.classList.contains('side-closed') ? 'false' : 'true'); }
+    function alternar() {
+      h.classList.toggle('side-closed');
+      try { localStorage.setItem('side', h.classList.contains('side-closed') ? '0' : '1'); } catch (e) {}
+      atualizar();
+    }
+    b.addEventListener('click', alternar);
+    document.getElementById('side-bd').addEventListener('click', alternar);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && window.innerWidth < 860 && !h.classList.contains('side-closed')) alternar();
+    });
+    atualizar();
+  })();
+</script>

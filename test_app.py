@@ -38,12 +38,23 @@ def main():
         con = appmod.db()
         turma_id = con.execute("SELECT id FROM turmas WHERE nome='INF10-M'").fetchone()["id"]
 
-    # abre aula com início 40 min antes
+    # pré-cadastro: disciplina + aula de hoje com data e assunto
+    with app.app_context():
+        con = appmod.db()
+        hj = appmod.hoje()
+        ok, msg = appmod.salvar_disciplina(con, "INF10-M", "Noite", appmod.NOMES_DIA[hj.weekday()],
+                                           hj.strftime("%d/%m/%Y"), hj.strftime("%d/%m/%Y"), "ASO II", 1, "19:00")
+        assert ok, msg
+        aula_id = con.execute("SELECT id FROM aulas WHERE turma_id=? AND data_ref=?", (turma_id, hj.isoformat())).fetchone()["id"]
+        con.commit()
+    # sem assunto não abre
     inicio_hm = appmod.hm(T0 - 40 * 60)
-    r = prof.post("/prof/aulas", data={"turma_id": turma_id, "inicio": inicio_hm,
-                                       "disciplina": "ASO II", "tolerancia": 10, "corte": 90})
-    assert r.status_code == 302
-    aula_id = int(r.headers["Location"].rsplit("/", 1)[1])
+    r = prof.post("/prof/agenda/%d/abrir" % aula_id, data={"inicio": inicio_hm, "tolerancia": 10, "corte": 90},
+                  follow_redirects=True)
+    assert "assunto da aula" in r.get_data(as_text=True)
+    prof.post("/prof/agenda/%d/assunto" % aula_id, data={"assunto": "Revisão geral", "next": "/prof"})
+    r = prof.post("/prof/agenda/%d/abrir" % aula_id, data={"inicio": inicio_hm, "tolerancia": 10, "corte": 90})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/prof/aula/%d" % aula_id)
 
     def aluno_escaneia(mat, nome="Fulano", turma="INF10-M", client=None):
         c = client or app.test_client()

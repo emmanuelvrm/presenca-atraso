@@ -10,7 +10,7 @@
   <ul class="lista">
     {% for t in turmas %}
     <li>
-      <span class="who"><b>{{ t.nome }}</b><small>{{ t.n }} aluno(s) · {{ t.vinc }} com aparelho vinculado</small></span>
+      <span class="who"><b>{{ t.nome }}</b><small>{{ t.turno or "" }}{% if t.turno %} · {% endif %}{{ t.n }} aluno(s) · {{ t.vinc }} com aparelho vinculado</small></span>
       <a class="btn sec sm" href="{{ url_for('prof_turma', tid=t.id) }}">Abrir</a>
     </li>
     {% endfor %}
@@ -19,17 +19,50 @@
 </section>
 
 <section class="card">
-  <h2>Nova turma / importar lista</h2>
+  <h2>Nova turma</h2>
   <form method="post">
-    <label>Nome da turma
-      <input name="nome" required maxlength="40" placeholder="Ex.: INF10-M">
+    <div class="row">
+      <label>Turma disponível (planilha de turmas)
+        <select name="catalogo" id="sel-turma">
+          <option value="">— escolher —</option>
+          {% for t in catalogo %}
+          <option value="{{ t.nome }}" {{ 'disabled' if t.nome in existentes }}>{{ t.nome }} · {{ t.curso }} · {{ t.turno }}{% if t.grade %} · grade {{ t.grade }}{% endif %}{% if t.nome in existentes %} (já cadastrada){% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>…ou digite outro nome
+        <input name="nome" maxlength="40" placeholder="Ex.: INF10M" id="in-turma">
+      </label>
+    </div>
+    <label>Lista de alunos (uma linha por aluno)
+      <textarea name="lista" placeholder="INF250005-Alonsio Andrade Da Silva&#10;INF240118Amanda Cristina Gomes Ferreira&#10;INF240136 Andre Lucas Pantaleao De Souza"></textarea>
     </label>
-    <label>Lista de alunos (uma linha por aluno: matrícula e nome)
-      <textarea name="lista" placeholder="INF240118 Amanda Cristina Gomes Ferreira&#10;INF240136 Andre Lucas Pantaleao De Souza"></textarea>
-    </label>
-    <p class="muted">Copie as colunas Matrícula e Nome da ata. Aceita separador por espaço, vírgula, ponto e vírgula ou tab.
-      Importar de novo atualiza os nomes sem perder os aparelhos vinculados.</p>
+    <p class="muted">Cole a matrícula e o nome, um por linha. O sistema limpa o que sobrar (traço, ponto, números de ordem, símbolos) e
+      aceita matrícula colada ao nome, com espaço, traço, vírgula, ponto e vírgula ou tab. Importar de novo atualiza os nomes sem perder os aparelhos vinculados.</p>
     <button class="btn" type="submit">Salvar turma</button>
   </form>
 </section>
+
+<section class="card">
+  <h2>Adicionar várias turmas (em massa)</h2>
+  <form method="post" action="{{ url_for('prof_turmas_massa') }}">
+    <label>Uma turma por linha (opcional: <code>turma;turno</code>)
+      <textarea name="nomes" style="min-height:110px" placeholder="INF10M&#10;INF12T;Tarde&#10;DSI01N"></textarea>
+    </label>
+    <div class="btns">
+      <button class="btn" type="submit">Adicionar turmas</button>
+      <button class="btn sec" type="submit" name="todas_catalogo" value="1"
+              onclick="return confirm('Cadastrar as {{ catalogo|length }} turmas da planilha?');">Adicionar todas as {{ catalogo|length }} da planilha</button>
+    </div>
+  </form>
+</section>
+<script>
+  (function () {
+    var s = document.getElementById('sel-turma'), i = document.getElementById('in-turma');
+    if (s && i) {
+      s.addEventListener('change', function () { if (s.value) i.value = ''; });
+      i.addEventListener('input', function () { if (i.value) s.value = ''; });
+    }
+  })();
+</script>
 {% endblock %}

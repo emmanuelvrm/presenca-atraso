@@ -9,12 +9,13 @@
   </div>
   <p id="sub" class="muted"></p>
 
-  <div class="chips">
-    <div class="chip"><b id="t-turma">–</b><span>na turma</span></div>
-    <div class="chip ok"><b id="t-ok">–</b><span>no horário</span></div>
-    <div class="chip warn"><b id="t-atr">–</b><span>atrasados</span></div>
-    <div class="chip bad"><b id="t-nao">–</b><span>ainda não entraram</span></div>
+  <div class="chips" role="group" aria-label="Filtrar alunos">
+    <button type="button" class="chip" data-f="turma" aria-pressed="true"><b id="t-turma">–</b><span>na turma (todos)</span></button>
+    <button type="button" class="chip ok" data-f="ok" aria-pressed="false"><b id="t-ok">–</b><span>no horário</span></button>
+    <button type="button" class="chip warn" data-f="atr" aria-pressed="false"><b id="t-atr">–</b><span>atrasados</span></button>
+    <button type="button" class="chip bad" data-f="nao" aria-pressed="false"><b id="t-nao">–</b><span>ainda não entraram</span></button>
   </div>
+  <input id="busca" class="busca" type="search" placeholder="Buscar aluno por nome ou matrícula" aria-label="Buscar aluno">
 
   <div class="actions">
     <button id="b-conferir" class="btn bad" type="button">Conferir antes de passar a lista</button>
@@ -45,18 +46,18 @@
     </div>
   </section>
 
-  <div class="cols">
-    <section class="card col">
+  <div class="cols" id="cols">
+    <section class="card col" id="s-ok">
       <h2>Já entraram <small class="muted">(no horário)</small></h2>
       <ul id="l-ok" class="lista"></ul>
     </section>
     <div class="col">
-      <section class="card">
+      <section class="card" id="s-atr">
         <h2>Entraram com atraso</h2>
         <p class="muted">Confirme se o aluno apresentou a autorização do pedagógico.</p>
         <ul id="l-atr" class="lista"></ul>
       </section>
-      <section class="card">
+      <section class="card" id="s-nl">
         <h2>Ainda não entraram <small class="muted">(não leram o QR)</small></h2>
         <ul id="l-nl" class="lista"></ul>
       </section>

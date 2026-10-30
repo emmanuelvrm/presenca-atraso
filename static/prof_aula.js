@@ -8,6 +8,7 @@
   var painelAberto = false;
   var ultimo = null;
   var assuntoSujo = false;
+  var filtro = 'turma';
 
   function el(tag, cls, texto) {
     var n = document.createElement(tag);
@@ -148,7 +149,35 @@
       });
       primeiro = false;
     }
+    aplicarFiltro();
   }
+
+
+  // cards clicáveis: mostram só um grupo de alunos; a busca filtra por nome/matrícula
+  function aplicarFiltro() {
+    var mapa = { ok: 's-ok', atr: 's-atr', nao: 's-nl' };
+    ['s-ok', 's-atr', 's-nl'].forEach(function (id) {
+      $(id).hidden = filtro !== 'turma' && mapa[filtro] !== id;
+    });
+    $('cols').className = filtro === 'turma' ? 'cols' : 'cols f1';
+    Array.prototype.forEach.call(document.querySelectorAll('.chips .chip'), function (c) {
+      c.setAttribute('aria-pressed', c.getAttribute('data-f') === filtro ? 'true' : 'false');
+    });
+    var q = $('busca').value.trim().toLowerCase();
+    Array.prototype.forEach.call(document.querySelectorAll('#l-ok li, #l-atr li, #l-nl li'), function (li) {
+      li.hidden = !!q && !li.classList.contains('vazio') && li.textContent.toLowerCase().indexOf(q) === -1;
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.chips .chip'), function (c) {
+    c.addEventListener('click', function () {
+      var f = c.getAttribute('data-f');
+      filtro = (filtro === f) ? 'turma' : f;
+      aplicarFiltro();
+      var alvo = { ok: 's-ok', atr: 's-atr', nao: 's-nl' }[filtro];
+      if (alvo) $(alvo).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+  $('busca').addEventListener('input', aplicarFiltro);
 
   function atualizar() {
     return fetch(base + '/estado', { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })

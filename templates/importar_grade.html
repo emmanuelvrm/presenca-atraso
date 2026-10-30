@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Grade lida{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Grade lida da imagem/PDF</h1>
+<p class="muted">Método: {{ metodo }}. Confira e corrija as linhas abaixo antes de importar — o OCR pode errar datas e nomes.</p>
+
+<section class="card">
+  <h2>Linhas para importar ({{ n }})</h2>
+  {% if not n %}<p class="pend">Não encontrei linhas com duas datas (início e fim). Veja o texto lido abaixo e monte as linhas à mão.</p>{% endif %}
+  <form method="post" action="{{ url_for('prof_importar_acao', tipo='disciplinas') }}">
+    <label>Turma · Turno · Dias · Início · Fim · (restantes) · Disciplina · Encontros (separados por tab)
+      <textarea name="lista" style="min-height:200px">{{ linhas }}</textarea>
+    </label>
+    <p class="muted">Se a coluna Turma estiver vazia, preencha antes de importar{% if turma %} (usei <b>{{ turma }}</b>){% endif %}.
+      Dias: <code>seg,qua,sex</code>. A turma precisa estar cadastrada e ter alunos para abrir aulas.</p>
+    <button class="btn" type="submit">Importar disciplinas</button>
+    <a class="btn sec" href="{{ url_for('prof_importar') }}">Cancelar</a>
+  </form>
+</section>
+
+<details class="card">
+  <summary>Texto reconhecido</summary>
+  <pre style="white-space:pre-wrap;margin:0">{{ texto }}</pre>
+</details>
+{% endblock %}

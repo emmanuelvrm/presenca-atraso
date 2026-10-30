@@ -1,12 +1,20 @@
 <!doctype html>
+{% set tem_nav = self.nav()|trim %}
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Presença{% endblock %} · Presença &amp; Atrasos</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% if tem_nav %}<script>
+  (function () {
+    var fechar = window.innerWidth < 860;
+    try { if (localStorage.getItem('side') === '0') fechar = true; } catch (e) {}
+    if (fechar) document.documentElement.classList.add('side-closed');
+  })();
+</script>{% endif %}
 </head>
-<body class="{% block bodyclass %}{% endblock %}">
+<body class="{% block bodyclass %}{% endblock %}{% if tem_nav %} comnav{% endif %}">
 {% block nav %}{% endblock %}
 <main class="wrap">
 {% for categoria, msg in get_flashed_messages(with_categories=true) %}

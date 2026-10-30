@@ -1,0 +1,4 @@
+# OCR opcional (pesado: PyTorch). Instale só onde houver RAM/disco de sobra.
+-r requirements.txt
+easyocr>=1.7
+pypdfium2>=4.30

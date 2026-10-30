@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Disciplinas{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Disciplinas</h1>
+<p class="muted">Cadastre aqui a disciplina de cada turma, com data de início, data de fim e o cronograma (assunto de cada aula).
+  Uma aula só pode ser aberta depois que turma, alunos, disciplina, data e assunto estiverem cadastrados.</p>
+
+<section class="card">
+  <h2>Disciplinas cadastradas</h2>
+  {% if lista %}
+  <ul class="lista">
+    {% for x in lista %}
+    <li>
+      <span class="who"><b>{{ x.d.turma }} · {{ x.d.nome }}</b>
+        <small>{{ x.periodo }} · {{ x.d.dias }} · {{ x.n }} aula(s) · {{ x.com }} com assunto
+          {% if x.com < x.n %}<span class="pend">(faltam {{ x.n - x.com }})</span>{% endif %}</small></span>
+      <a class="btn sec sm" href="{{ url_for('prof_disciplina', did=x.d.id) }}">Abrir / cronograma</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="vazio">Nenhuma disciplina ainda. Cadastre abaixo ou use <a href="{{ url_for('prof_importar') }}">Importar</a>.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Nova disciplina</h2>
+  {% if not turmas %}
+    <p>Cadastre antes a turma em <a href="{{ url_for('prof_turmas') }}">Turmas</a>.</p>
+  {% else %}
+  <form method="post">
+    <div class="row">
+      <label>Turma
+        <select name="turma_id" required>
+          {% for t in turmas %}<option value="{{ t.id }}">{{ t.nome }}{% if t.turno %} · {{ t.turno }}{% endif %}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Disciplina
+        <input name="nome" list="disc-nomes" required maxlength="120" id="d-nome" placeholder="Escolha da planilha ou digite" autocomplete="off">
+        <datalist id="disc-nomes">{% for n in nomes %}<option value="{{ n }}">{% endfor %}</datalist>
+      </label>
+    </div>
+    <div class="row">
+      <label>Data de início <input name="ini" required placeholder="dd/mm/aaaa"></label>
+      <label>Data de fim (prova) <input name="fim" required placeholder="dd/mm/aaaa"></label>
+      <label>Dias da semana <input name="dias" required placeholder="seg,qua,sex"></label>
+      <label>Hora de início <input name="hora" type="time"></label>
+      <label>Nº de encontros <input name="enc" type="number" min="1" max="200" id="d-enc"></label>
+    </div>
+    <label>Cronograma das aulas (opcional — pode preencher depois)
+      <textarea name="cronograma" placeholder="Aula 1: Apresentação e instalação do ambiente&#10;Aula 2: Variáveis e tipos de dados&#10;Aula 3: Estruturas condicionais"></textarea>
+    </label>
+    <p class="muted">As aulas são geradas pelos dias da semana entre o início e o fim, pulando feriados nacionais.
+      Quem escreve só os assuntos, um por linha, também funciona (vão para as aulas 1, 2, 3…).</p>
+    <button class="btn" type="submit">Salvar disciplina</button>
+  </form>
+  <script>
+    (function () {
+      var cat = {{ catalogo_disc|tojson }};
+      var nome = document.getElementById('d-nome'), enc = document.getElementById('d-enc');
+      nome.addEventListener('change', function () {
+        var achou = cat.filter(function (c) { return c.nome === nome.value; })[0];
+        if (achou && !enc.value) enc.value = achou.encontros;
+      });
+    })();
+  </script>
+  {% endif %}
+</section>
+{% endblock %}

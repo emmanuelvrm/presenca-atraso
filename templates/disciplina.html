@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ d.nome }}{% endblock %}
+{% block nav %}{% include "_nav.html" %}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('prof_disciplinas') }}">← Disciplinas</a></p>
+<h1>{{ d.turma }} · {{ d.nome }}</h1>
+{% if n_alunos == 0 %}<p class="pend">A turma ainda não tem alunos: <a href="{{ url_for('prof_turma', tid=d.turma_id) }}">cadastre os alunos</a> para poder abrir as aulas.</p>{% endif %}
+
+<section class="card">
+  <h2>Período</h2>
+  <form method="post" action="{{ url_for('prof_disciplina_editar', did=d.id) }}">
+    <label>Disciplina <input name="nome" value="{{ d.nome }}" required maxlength="120"></label>
+    <div class="row">
+      <label>Data de início <input name="ini" value="{{ ini }}" required placeholder="dd/mm/aaaa"></label>
+      <label>Data de fim (prova) <input name="fim" value="{{ fim }}" required placeholder="dd/mm/aaaa"></label>
+      <label>Dias da semana <input name="dias" value="{{ d.dias }}" required></label>
+      <label>Hora de início <input name="hora" type="time" value="{{ d.hora_inicio or '' }}"></label>
+      <label>Nº de encontros (planilha) <input name="enc" type="number" min="1" max="200" value="{{ d.encontros or '' }}"></label>
+    </div>
+    <p class="muted">Mudando datas ou dias, as aulas agendadas fora do período saem e as que faltam são criadas (aulas já abertas nunca são apagadas).</p>
+    <button class="btn" type="submit">Salvar período</button>
+  </form>
+</section>
+
+<form method="post" action="{{ url_for('prof_disciplina_cronograma', did=d.id) }}">
+<section class="card">
+  <h2>Cronograma das aulas ({{ aulas|length }})</h2>
+  <ul class="lista">
+    {% for a in aulas %}
+    <li id="aula{{ a.id }}">
+      <span class="who"><b>Aula {{ a.numero }} · {{ a.dia }}</b>
+        <small>{% if a.status == 'agendada' %}agendada{% elif a.status == 'aberta' %}aberta{% else %}encerrada · {{ a.leram }} leitura(s){% endif %}
+          {% if a.pend %}<span class="pend"> · falta: {{ a.pend|join(', ') }}</span>{% endif %}</small></span>
+      <input name="assunto-{{ a.id }}" value="{{ a.assunto or '' }}" maxlength="300" placeholder="Assunto da aula {{ a.numero }}"
+             style="flex:1;min-width:220px;margin:0" aria-label="Assunto da aula {{ a.numero }}">
+      <span class="btns">
+        {% if a.status == 'aberta' %}<a class="btn sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Acompanhar</a>
+        {% elif a.status == 'encerrada' %}<a class="btn sec sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Ver</a>{% endif %}
+      </span>
+    </li>
+    {% else %}<li class="vazio">Sem aulas.</li>{% endfor %}
+  </ul>
+  <button class="btn" type="submit">Salvar assuntos</button>
+</section>
+
+<section class="card">
+  <h2>Colar cronograma em texto</h2>
+  <label>Uma aula por linha: <code>Aula 1: assunto</code>
+    <textarea name="cronograma" placeholder="Aula 1: Apresentação e instalação do ambiente&#10;Aula 2: Variáveis e tipos de dados">{{ cron }}</textarea>
+  </label>
+  <p class="muted">Aceita também <code>1) assunto</code>, <code>1 - assunto</code> ou só o assunto (segue a ordem). O texto acima já traz os assuntos atuais; edite e salve.</p>
+  <button class="btn" type="submit">Aplicar texto ao cronograma</button>
+</section>
+</form>
+
+<section class="card">
+  <h2>Datas</h2>
+  <form method="post" action="{{ url_for('prof_agenda_adicionar', did=d.id) }}" class="btns">
+    <input type="hidden" name="next" value="{{ caminho }}">
+    <input name="data" placeholder="dd/mm/aaaa" style="width:150px;margin:0" aria-label="Data da nova aula" required>
+    <button class="btn sec sm" type="submit">Adicionar aula nesta data</button>
+  </form>
+  <ul class="lista">
+    {% for a in aulas if a.status == 'agendada' %}
+    <li><span>Aula {{ a.numero }} · {{ a.dia }}</span>
+      <form method="post" action="{{ url_for('prof_agenda_remover', aula_id=a.id) }}" onsubmit="return confirm('Remover esta aula?');">
+        <input type="hidden" name="next" value="{{ caminho }}"><button class="btn sec sm" type="submit">Remover</button></form></li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card">
+  <form method="post" action="{{ url_for('prof_disciplina_excluir', did=d.id) }}" onsubmit="return confirm('Excluir a disciplina e todas as aulas agendadas?');">
+    <button class="btn bad sm" type="submit">Excluir disciplina</button>
+    <span class="muted"> só se nenhuma aula já foi aberta.</span>
+  </form>
+</section>
+{% endblock %}

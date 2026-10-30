@@ -20,37 +20,35 @@
 {% endif %}
 
 <section class="card">
-  <h2>Abrir aula</h2>
-  {% if not turmas %}
-    <p>Cadastre uma turma antes: <a href="{{ url_for('prof_turmas') }}">Turmas</a>.</p>
+  <h2>Aulas de hoje</h2>
+  {% if de_hoje %}
+  <ul class="lista">
+  {% for a in de_hoje %}
+    <li>
+      <span class="who"><b>{{ a.turma }} · {{ a.disciplina }}</b>
+        <small>{% if a.numero %}aula {{ a.numero }} · {% endif %}{{ a.assunto or 'sem assunto' }}</small>
+        {% if a.pend %}<small class="pend">falta cadastrar: {{ a.pend|join(', ') }}</small>{% endif %}</span>
+      {% if a.status == 'aberta' %}
+        <a class="btn sm" href="{{ url_for('prof_aula', aula_id=a.id) }}">Acompanhar (aberta)</a>
+      {% elif a.pend %}
+        <a class="btn sec sm" href="{{ url_for('prof_disciplina', did=a.disciplina_id) if a.disciplina_id else url_for('prof_disciplinas') }}">Completar cadastro</a>
+      {% else %}
+        <form method="post" action="{{ url_for('prof_agenda_abrir', aula_id=a.id) }}" class="btns">
+          <input type="time" name="inicio" value="{{ a.hora or '19:00' }}" style="width:auto;margin:0" aria-label="Início da aula" required>
+          <input type="hidden" name="tolerancia" value="{{ tol }}"><input type="hidden" name="corte" value="{{ corte }}">
+          <button class="btn sm" type="submit">Abrir aula</button>
+        </form>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
   {% else %}
-  <form method="post" action="{{ url_for('prof_criar_aula') }}">
-    <div class="row">
-      <label>Turma
-        <select name="turma_id" required>
-          {% for t in turmas %}<option value="{{ t.id }}">{{ t.nome }} ({{ t.n }})</option>{% endfor %}
-        </select>
-      </label>
-      <label>Início da aula
-        <input name="inicio" type="time" value="{{ agora }}" required>
-      </label>
-    </div>
-    <label>Disciplina
-      <input name="disciplina" maxlength="120" value="{{ ultima_disciplina }}" placeholder="Ex.: Administração de Sistemas Operacionais II">
-    </label>
-    <div class="row">
-      <label>Tolerância (min)
-        <input name="tolerancia" type="number" min="0" max="600" value="{{ tol }}">
-      </label>
-      <label>Corte para assinar (min)
-        <input name="corte" type="number" min="1" max="600" value="{{ corte }}">
-      </label>
-    </div>
-    <p class="muted">Quem chegar até a tolerância fica "no horário". Acima do corte (90 min = 1h30) o aluno não assina a lista.
-      Abrir uma nova aula encerra a aula aberta anterior da mesma turma.</p>
-    <button class="btn" type="submit">Abrir aula</button>
-  </form>
+    <p class="vazio">Nenhuma aula cadastrada para hoje.</p>
   {% endif %}
+  <p class="muted">Só abre a aula que já está cadastrada (turma, alunos, disciplina, data e assunto).
+    Tolerância {{ tol }} min · corte para assinar {{ corte }} min. Cadastro:
+    {{ cont.turmas }} turma(s) · {{ cont.alunos }} aluno(s) · {{ cont.disciplinas }} disciplina(s) · {{ cont.aulas }} aula(s).
+    <a href="{{ url_for('prof_disciplinas') }}">Disciplinas</a> · <a href="{{ url_for('prof_agenda') }}">Todas as aulas</a></p>
 </section>
 
 <section class="card">

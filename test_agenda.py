@@ -93,10 +93,10 @@ def main():
 
     # aluno se cadastra e escaneia em 30/10 às 13:35 (aula 13:30)
     appmod.now = lambda: em(30, 10, 13, 35)
-    # abre pela aula do dia (formulário ad hoc reaproveita a agendada)
     with app.app_context():
         tid = appmod.db().execute("SELECT id FROM turmas WHERE nome='INF12T'").fetchone()["id"]
-    r = prof.post("/prof/aulas", data={"turma_id": tid, "inicio": "13:30", "disciplina": "", "tolerancia": 10, "corte": 90})
+    assert prof.post("/prof/aulas", data={"turma_id": tid, "inicio": "13:30"}).status_code in (404, 405)  # abertura avulsa removida
+    r = prof.post("/prof/agenda/%d/abrir" % aula30["id"], data={"inicio": "13:30", "tolerancia": 10, "corte": 90})
     assert r.status_code == 302 and r.headers["Location"].endswith("/prof/aula/%d" % aula30["id"]), r.headers["Location"]
     with app.app_context():
         assert appmod.db().execute("SELECT COUNT(*) AS n FROM aulas").fetchone()["n"] > 0
@@ -143,8 +143,22 @@ def main():
     with app.app_context():
         ed_aula = appmod.db().execute("SELECT id FROM aulas WHERE disciplina_id=? AND data_ref='2026-11-03'",
                                       (ed["id"],)).fetchone()["id"]
+    r = prof.post("/prof/agenda/%d/abrir" % ed_aula, data={"inicio": "19:00"}, follow_redirects=True)
+    assert "falta cadastrar" in r.get_data(as_text=True) and "assunto da aula" in r.get_data(as_text=True)
+    prof.post("/prof/agenda/%d/assunto" % ed_aula, data={"assunto": "Listas e pilhas", "next": "/prof/agenda"})
+    with app.app_context():
+        t13 = appmod.db().execute("SELECT id FROM turmas WHERE nome='INF13N'").fetchone()["id"]
+    with app.app_context():  # turma nova, sem alunos: não abre
+        con = appmod.db()
+        assert appmod.salvar_disciplina(con, "ZZ99N", "Noite", "ter", "03/11/2026", "03/11/2026", "Teste", 1)[0]
+        vazia = con.execute("SELECT id FROM aulas WHERE disciplina='Teste'").fetchone()["id"]
+        con.execute("UPDATE aulas SET assunto='x' WHERE id=?", (vazia,))
+        con.commit()
+    r = prof.post("/prof/agenda/%d/abrir" % vazia, data={"inicio": "19:00"}, follow_redirects=True)
+    assert "falta cadastrar alunos da turma" in r.get_data(as_text=True)
+    prof.post("/prof/turmas/%d" % t13, data={"lista": "INF260003-Aluno Tres"})
     r = prof.post("/prof/agenda/%d/abrir" % ed_aula, data={"inicio": "19:00"})
-    assert r.status_code == 302
+    assert r.status_code == 302 and "/prof/aula/" in r.headers["Location"]
     d3 = app.test_client()
     assert d3.post("/api/registrar", json={"matricula": "INF260003", "nome": "x", "turma": "INF13N"}).status_code == 200
     j3 = d3.post("/api/checkin", json={}).json

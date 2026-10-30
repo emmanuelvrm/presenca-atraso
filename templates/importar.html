@@ -23,6 +23,23 @@
 </section>
 
 <section class="card">
+  <h2>Grade em imagem ou PDF (leitura automática)</h2>
+  <p class="muted">Envie a foto/print (PNG, JPG) ou o PDF da grade de aulas. O sistema lê o texto{% if ocr_ok %} com EasyOCR{% else %} (PDF com texto; para imagens é preciso o EasyOCR, que <b>não está instalado neste servidor</b> — use <code>python grade_ocr.py grade.png TURMA</code> no seu computador){% endif %},
+    monta as linhas e mostra para você conferir antes de importar.</p>
+  <form method="post" action="{{ url_for('prof_importar_grade') }}" enctype="multipart/form-data">
+    <div class="row">
+      <label>Turma (usada quando a linha não traz a turma)
+        <select name="turma"><option value="">—</option>
+          {% for t in turmas %}<option>{{ t.nome }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Arquivo <input type="file" name="arquivo" accept="image/*,.pdf" required></label>
+    </div>
+    <button class="btn" type="submit">Ler grade</button>
+  </form>
+</section>
+
+<section class="card">
   <h2>Alunos</h2>
   <form method="post" action="{{ url_for('prof_importar_acao', tipo='alunos') }}" enctype="multipart/form-data">
     <div class="row">
@@ -36,8 +53,9 @@
       </label>
     </div>
     <label>Matrícula e nome, um por linha
-      <textarea name="lista" placeholder="INF240118 Amanda Cristina Gomes Ferreira"></textarea>
+      <textarea name="lista" placeholder="INF250005-Alonsio Andrade Da Silva&#10;INF240118Amanda Cristina Gomes Ferreira&#10;INF240136 Andre Lucas Pantaleao De Souza"></textarea>
     </label>
+    <p class="muted">Caracteres extras (traço, ponto, números de ordem, símbolos) são limpos automaticamente.</p>
     <label>…ou arquivo <input type="file" name="arquivo" accept=".csv,.tsv,.txt"></label>
     <label style="font-weight:400"><input type="checkbox" name="com_turma" value="1" style="display:inline;width:auto;margin:0 6px 0 0">
       a lista traz a turma na primeira coluna (<code>Turma;Matrícula;Nome</code>) — várias turmas de uma vez</label>
@@ -47,6 +65,7 @@
 
 <section class="card">
   <h2>Turmas</h2>
+  <p class="muted">Turmas disponíveis na planilha: {% for t in catalogo %}<code>{{ t.nome }}</code> {% endfor %}</p>
   <form method="post" action="{{ url_for('prof_importar_acao', tipo='turmas') }}" enctype="multipart/form-data">
     <label>Uma turma por linha (opcional: <code>turma;turno</code>)
       <textarea name="lista" style="min-height:90px" placeholder="INF10M;Manhã&#10;INF12T;Tarde"></textarea>
